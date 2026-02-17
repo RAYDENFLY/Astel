@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuantumTrade Dashboard</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js CDN (for small dashboard charts) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Font Awesome CDN -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <style>
+      @keyframes qtFlashGreen {
+        0% {
+          background-color: rgba(16, 185, 129, 0.22);
+        }
+        100% {
+          background-color: rgba(16, 185, 129, 0);
+        }
+      }
+
+      @keyframes qtFlashRed {
+        0% {
+          background-color: rgba(244, 63, 94, 0.20);
+        }
+        100% {
+          background-color: rgba(244, 63, 94, 0);
+        }
+      }
+
+      .qt-flash-green {
+        animation: qtFlashGreen 650ms ease-out 1;
+        border-radius: 0.375rem;
+      }
+
+      .qt-flash-red {
+        animation: qtFlashRed 650ms ease-out 1;
+        border-radius: 0.375rem;
+      }
+    </style>
+  </head>
+
+  <body class="bg-slate-950 text-slate-100">
+  <div class="w-full max-w-[108rem] mx-auto p-6 space-y-6">
+      <header class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight">
+            <i class="fa-solid fa-chart-line mr-2 text-emerald-400"></i>
+            QuantumTrade Monitor
+          </h1>
+          <p class="text-sm text-slate-400">Auto-refresh every 10 seconds (read-only).</p>
+        </div>
+        <div id="status" class="text-sm text-slate-400">Loading…</div>
+      </header>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-wallet mr-2 text-sky-400"></i>
+            Account Summary
+          </h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-slate-400">Equity (USDT)</div>
+              <div id="equity" class="text-xl font-mono">—</div>
+              <div id="equity_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
+              <div id="equity_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Peak Equity (USDT)</div>
+              <div id="peak_equity" class="text-xl font-mono">—</div>
+              <div id="peak_equity_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
+              <div id="peak_equity_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
+            </div>
+            <div class="col-span-2">
+              <p id="starting_capital" class="text-xs text-slate-400 font-mono mt-1 hidden">—</p>
+              <p class="text-xs text-slate-500 font-mono mt-1">Exchange Connected: Gate</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">
+              <i class="fa-solid fa-chart-simple mr-2 text-emerald-400"></i>
+              QT PERFORMANCE METRICS
+            </h2>
+            <div id="dex_status" class="text-xs font-semibold px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              RUNNING
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-4">
+              <div class="text-xs text-slate-400">TOTAL NET PNL</div>
+              <div class="text-xs text-slate-500">ALL TIME</div>
+              <div id="dex_total_net_pnl" class="text-lg font-mono mt-2">—</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-4">
+              <div class="text-xs text-slate-400">AVG. WIN RATE</div>
+              <div class="text-xs text-slate-500">ALL TIME</div>
+              <div id="dex_avg_win_rate" class="text-lg font-mono mt-2">—</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-2 gap-3 mt-4 text-sm">
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400">TOTAL WIN</div>
+              <div id="dex_total_win" class="text-base font-mono mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400">TOTAL LOSS</div>
+              <div id="dex_total_loss" class="text-base font-mono mt-1">—</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 text-sm">
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400">Avg. TOTAL PNL</div>
+              <div id="dex_avg_total_pnl" class="text-base font-mono mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400">Avg. WIN RATE</div>
+              <div id="dex_avg_win_rate_2" class="text-base font-mono mt-1">—</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400">Avg. APY</div>
+              <div id="dex_avg_apy" class="text-base font-mono mt-1">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-chart-area mr-2 text-cyan-400"></i>
+            Unrealized PnL
+          </h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-slate-400">PnL (USDT)</div>
+              <div id="unreal_pnl" class="text-xl font-mono">—</div>
+              <div id="unreal_pnl_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
+              <div id="unreal_pnl_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Open positions</div>
+              <div id="unreal_pos_count" class="text-xl font-mono">—</div>
+            </div>
+          </div>
+          <div class="text-xs text-slate-500 mt-2">Sum of exchange <span class="font-mono">unrealised_pnl</span> across open positions.</div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-percent mr-2 text-emerald-400"></i>
+            Average Win Rate (All-Time)
+          </h2>
+          <div class="h-40">
+            <canvas id="chart_alltime_winrate"></canvas>
+          </div>
+          <div class="text-xs text-slate-500 mt-2">Computed from <span class="font-mono">trade_closures</span> (all rows).</div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-coins mr-2 text-amber-400"></i>
+            Net PnL (Monthly)
+          </h2>
+          <div class="h-40">
+            <canvas id="chart_monthly_netpnl"></canvas>
+          </div>
+          <div class="text-xs text-slate-500 mt-2">Net PnL per month from <span class="font-mono">trade_closures.pnl</span>.</div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-scale-balanced mr-2 text-fuchsia-400"></i>
+            Win/Loss Ratio (Monthly)
+          </h2>
+          <div class="h-40">
+            <canvas id="chart_monthly_wl"></canvas>
+          </div>
+          <div class="text-xs text-slate-500 mt-2">Monthly wins vs losses counts.</div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-trophy mr-2 text-emerald-400"></i>
+            Closed Trades Stats
+          </h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-slate-400">Win rate</div>
+              <div id="winrate" class="text-xl font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Closed trades</div>
+              <div id="closed_trades" class="text-xl font-mono">—</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <div class="text-xs text-slate-400">Total PnL</div>
+              <div id="total_pnl" class="text-lg font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Avg PnL</div>
+              <div id="avg_pnl" class="text-lg font-mono">—</div>
+            </div>
+          </div>
+          <!-- <div class="text-xs text-slate-500 mt-2">Computed from SQLite table <span class="font-mono">trade_closures</span> (last 500).</div> -->
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-brain mr-2 text-fuchsia-400"></i>
+            Machine Learning Config
+          </h2>
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div class="text-xs text-slate-400">Model</div>
+              <div id="ml_model" class="font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Min train rows</div>
+              <div id="ml_min_rows" class="font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Timeframe</div>
+              <div id="ml_timeframe" class="font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Data source</div>
+              <div id="ml_data_source" class="font-mono">—</div>
+            </div>
+          </div>
+          <div class="mt-4">
+            <div class="text-xs text-slate-400 mb-1">LightGBM params</div>
+            <pre id="ml_params" class="text-xs bg-slate-950/40 border border-slate-800 rounded-lg p-3 overflow-x-auto text-slate-200">—</pre>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fa-solid fa-shield-halved mr-2 text-amber-400"></i>
+            Risk Metrics
+          </h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-xs text-slate-400">Drawdown</div>
+              <div id="drawdown" class="text-xl font-mono">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Total Exposure</div>
+              <div id="exposure" class="text-xl font-mono">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">
+            <i class="fa-solid fa-layer-group mr-2 text-fuchsia-400"></i>
+            Open Positions
+          </h2>
+          <div class="text-xs text-slate-400" id="positions_count">—</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="text-slate-300">
+              <tr class="border-b border-slate-800">
+                <th class="text-left py-2 pr-4">PAIR</th>
+                <th class="text-left py-2 px-4">POSITION</th>
+                <th class="text-right py-2 px-4">LEV</th>
+                <th class="text-right py-2 px-4">ENTRY PRICE</th>
+                <th class="text-right py-2 px-4">MARK PRICE</th>
+                <th class="text-right py-2 px-4">TAKE PROFIT</th>
+                <th class="text-right py-2 px-4">STOP LOSS</th>
+                <th class="text-right py-2 px-4">ENTRY PRICE</th>
+                <th class="text-right py-2 px-4">EXIT PRICE</th>
+                <th class="text-right py-2 px-4">PROFIT</th>
+                <th class="text-left py-2 pl-4">STATE</th>
+              </tr>
+            </thead>
+            <tbody id="positions_tbody" class="font-mono text-slate-100"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+        <h2 class="text-lg font-semibold mb-4">
+          <i class="fa-solid fa-calendar-week mr-2 text-emerald-400"></i>
+          Weekly Performance
+        </h2>
+        <div id="weekly" class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm"></div>
+      </section>
+
+      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">
+            <i class="fa-solid fa-receipt mr-2 text-cyan-400"></i>
+            Recent Trades (Journal)
+          </h2>
+          <div class="text-xs text-slate-400" id="trades_count">—</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="text-slate-300">
+              <tr class="border-b border-slate-800">
+                <th class="text-left py-2 pr-4">Time</th>
+                <th class="text-left py-2 px-4">Asset</th>
+                <th class="text-left py-2 px-4">Side</th>
+                <th class="text-right py-2 px-4">Qty</th>
+                <th class="text-right py-2 px-4">Entry</th>
+                <th class="text-right py-2 px-4">Entry Fee</th>
+                <th class="text-right py-2 px-4">SL</th>
+                <th class="text-right py-2 pl-4">TP</th>
+                <th class="text-left py-2 pl-4">TP/SL Order</th>
+              </tr>
+            </thead>
+            <tbody id="trades_tbody" class="font-mono text-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="text-xs text-slate-500 mt-2">TP shown is currently a simple 1R target (for visibility).</div>
+      </section>
+
+      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">
+            <i class="fa-solid fa-flag-checkered mr-2 text-emerald-400"></i>
+            Recent Closures (Realized)
+          </h2>
+          <div class="text-xs text-slate-400" id="closures_count">—</div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="text-slate-300">
+              <tr class="border-b border-slate-800">
+                <th class="text-left py-2 pr-4">Time</th>
+                <th class="text-left py-2 px-4">Asset</th>
+                <th class="text-left py-2 px-4">Reason</th>
+                <th class="text-right py-2 px-4">Qty</th>
+                <th class="text-right py-2 px-4">Entry</th>
+                <th class="text-right py-2 px-4">Exit</th>
+                <th class="text-right py-2 px-4">Fees</th>
+                <th class="text-right py-2 px-4">PnL</th>
+                <th class="text-left py-2 pl-4">Exit Order</th>
+              </tr>
+            </thead>
+            <tbody id="closures_tbody" class="font-mono text-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="text-xs text-slate-500 mt-2">These rows come from SQLite table <span class="font-mono">trade_closures</span>.</div>
+      </section>
+
+      <footer class="text-xs text-slate-500 py-2">
+        Data sources: Gate.io futures (read-only) + SQLite tables (equity_curve, weekly_performance).
+      </footer>
+    </div>
+
+    <script>
+  // Keep last seen PROFIT per contract to animate changes.
+  window.__lastProfitByPair = window.__lastProfitByPair || {};
+
+      const fmtUsd = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        return Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      };
+
+      // For small crypto prices (e.g., 0.2826), show more precision.
+      const fmtPx = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        const n = Number(x);
+        const frac = Math.abs(n) < 1 ? 4 : 2;
+        return n.toLocaleString(undefined, { maximumFractionDigits: frac });
+      };
+
+      const fmtIdr = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        return Number(x).toLocaleString("id-ID", { maximumFractionDigits: 0 });
+      };
+
+      // Very small, dependency-free Indonesian number-to-words (terbilang) for positive integers.
+      // Covers the typical dashboard magnitudes. Returns empty string for invalid inputs.
+      function terbilang(n) {
+        try {
+          if (n === null || n === undefined) return "";
+          let x = Math.floor(Math.abs(Number(n)));
+          if (!Number.isFinite(x)) return "";
+          if (x === 0) return "nol";
+
+          const satuan = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"];
+          function _t(y) {
+            y = Math.floor(y);
+            if (y < 12) return satuan[y];
+            if (y < 20) return _t(y - 10) + " belas";
+            if (y < 100) {
+              const puluh = Math.floor(y / 10);
+              const sisa = y % 10;
+              return _t(puluh) + " puluh" + (sisa ? " " + _t(sisa) : "");
+            }
+            if (y < 200) return "seratus" + (y % 100 ? " " + _t(y - 100) : "");
+            if (y < 1000) {
+              const r = Math.floor(y / 100);
+              const s = y % 100;
+              return _t(r) + " ratus" + (s ? " " + _t(s) : "");
+            }
+            if (y < 2000) return "seribu" + (y % 1000 ? " " + _t(y - 1000) : "");
+            if (y < 1_000_000) {
+              const ribu = Math.floor(y / 1000);
+              const s = y % 1000;
+              return _t(ribu) + " ribu" + (s ? " " + _t(s) : "");
+            }
+            if (y < 1_000_000_000) {
+              const juta = Math.floor(y / 1_000_000);
+              const s = y % 1_000_000;
+              return _t(juta) + " juta" + (s ? " " + _t(s) : "");
+            }
+            if (y < 1_000_000_000_000) {
+              const m = Math.floor(y / 1_000_000_000);
+              const s = y % 1_000_000_000;
+              return _t(m) + " miliar" + (s ? " " + _t(s) : "");
+            }
+            const tr = Math.floor(y / 1_000_000_000_000);
+            const s = y % 1_000_000_000_000;
+            return _t(tr) + " triliun" + (s ? " " + _t(s) : "");
+          }
+
+          return _t(x).trim();
+        } catch {
+          return "";
+        }
+      }
+
+      // For IDR display: drop the last 3 digits (rupiah has no cents) so the words
+      // don't include the trailing hundreds, and append "rupiah".
+      function terbilangRupiahNoLast3(n) {
+        try {
+          if (n === null || n === undefined) return "";
+          let x = Math.floor(Math.abs(Number(n)));
+          if (!Number.isFinite(x)) return "";
+          // remove last 3 digits (e.g., 22.171.162 -> 22.171.000)
+          x = Math.floor(x / 1000) * 1000;
+          let w = terbilang(x);
+          if (!w) return "";
+          w = w.trim();
+          return (w.charAt(0).toUpperCase() + w.slice(1) + " rupiah").trim();
+        } catch {
+          return "";
+        }
+      }
+
+      const fmtPct = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        return (Number(x) * 100).toFixed(2) + "%";
+      };
+
+      function setStatus(text, ok = true) {
+        const el = document.getElementById("status");
+        el.textContent = text;
+        el.className = ok ? "text-sm text-slate-400" : "text-sm text-rose-400";
+      }
+
+      async function loadAccount() {
+        const r = await fetch("/api/account");
+        if (!r.ok) throw new Error("/api/account failed");
+        const d = await r.json();
+
+        document.getElementById("equity").textContent = fmtUsd(d.equity);
+        document.getElementById("peak_equity").textContent = fmtUsd(d.peak_equity);
+
+        // Optional: show IDR conversion if rate is provided by backend.
+        const rate = Number(d.usdt_to_idr);
+        const hasRate = !Number.isNaN(rate) && rate > 0;
+        const equityIdrEl = document.getElementById("equity_idr");
+        const peakIdrEl = document.getElementById("peak_equity_idr");
+        const equityWordsEl = document.getElementById("equity_idr_words");
+        const peakWordsEl = document.getElementById("peak_equity_idr_words");
+        if (hasRate) {
+          // Cache rate so WS-driven cards (unrealized) can update without refetching /api/account.
+          window.__usdtToIdrRate = rate;
+          const eqIdr = Math.round(Number(d.equity) * rate);
+          const pkIdr = Math.round(Number(d.peak_equity) * rate);
+
+          equityIdrEl.textContent = "Rp " + fmtIdr(eqIdr);
+          peakIdrEl.textContent = "Rp " + fmtIdr(pkIdr);
+
+          const eqWords = terbilang(eqIdr);
+          const pkWords = terbilang(pkIdr);
+          const eqWords2 = terbilangRupiahNoLast3(eqIdr);
+          const pkWords2 = terbilangRupiahNoLast3(pkIdr);
+          equityWordsEl.textContent = eqWords2 || "—";
+          peakWordsEl.textContent = pkWords2 || "—";
+        } else {
+          window.__usdtToIdrRate = null;
+          equityIdrEl.textContent = "—";
+          peakIdrEl.textContent = "—";
+          equityWordsEl.textContent = "—";
+          peakWordsEl.textContent = "—";
+        }
+
+        document.getElementById("drawdown").textContent = fmtPct(d.drawdown);
+        document.getElementById("exposure").textContent = fmtPct(d.total_exposure);
+
+        // Optional: starting capital (modal awal)
+        const scEl = document.getElementById("starting_capital");
+        const sc = d.starting_capital_usdt;
+        if (scEl) {
+          const n = Number(sc);
+          if (sc !== null && sc !== undefined && !Number.isNaN(n) && Number.isFinite(n) && n > 0) {
+            scEl.textContent = "Mulai modal dari " + fmtUsd(n);
+            scEl.classList.remove("hidden");
+          } else {
+            scEl.textContent = "—";
+            scEl.classList.add("hidden");
+          }
+        }
+      }
+
+      async function loadUnrealizedPnL() {
+        // We reuse /api/account for the optional USDT->IDR rate.
+        const [ra, rp] = await Promise.all([fetch("/api/account"), fetch("/api/positions")]);
+        if (!ra.ok) throw new Error("/api/account failed");
+        if (!rp.ok) throw new Error("/api/positions failed");
+        const a = await ra.json();
+        const p = await rp.json();
+
+        const positions = p.positions || [];
+        let sum = 0;
+        for (const pos of positions) {
+          const v = pos.unrealised_pnl ?? pos.unrealized_pnl ?? null;
+          const n = Number(v);
+          if (!Number.isNaN(n)) sum += n;
+        }
+
+        const pnlEl = document.getElementById("unreal_pnl");
+        pnlEl.textContent = fmtUsd(sum);
+        pnlEl.className = "text-xl font-mono " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
+        document.getElementById("unreal_pos_count").textContent = String(positions.length);
+
+        const rate = Number(a.usdt_to_idr);
+        const hasRate = !Number.isNaN(rate) && rate > 0;
+        const idrEl = document.getElementById("unreal_pnl_idr");
+        const wordsEl = document.getElementById("unreal_pnl_idr_words");
+        if (hasRate) {
+          const idr = Math.round(sum * rate);
+          const absIdr = Math.abs(idr);
+          idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
+
+          const w = terbilang(absIdr);
+          const w2 = terbilangRupiahNoLast3(absIdr);
+          wordsEl.textContent = w2 || "—";
+        } else {
+          idrEl.textContent = "—";
+          wordsEl.textContent = "—";
+        }
+      }
+
+      function renderUnrealizedCardFromWs(msg) {
+        if (!msg) return;
+
+        const sum = Number(msg.unreal_pnl);
+        if (Number.isNaN(sum)) return;
+
+        const pnlEl = document.getElementById("unreal_pnl");
+        pnlEl.textContent = fmtUsd(sum);
+        pnlEl.className = "text-xl font-mono " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
+
+        const cnt = Number(msg.pos_count);
+        if (!Number.isNaN(cnt)) {
+          document.getElementById("unreal_pos_count").textContent = String(cnt);
+        }
+
+        const rate = Number(window.__usdtToIdrRate);
+        const hasRate = !Number.isNaN(rate) && rate > 0;
+        const idrEl = document.getElementById("unreal_pnl_idr");
+        const wordsEl = document.getElementById("unreal_pnl_idr_words");
+        if (hasRate) {
+          const idr = Math.round(sum * rate);
+          const absIdr = Math.abs(idr);
+          idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
+          const w2 = terbilangRupiahNoLast3(absIdr);
+          wordsEl.textContent = w2 || "—";
+        }
+      }
+
+      async function loadMlConfig() {
+  const r = await fetch("/api/ml_config");
+  if (!r.ok) throw new Error("/api/ml_config failed");
+  const d = await r.json();
+
+  document.getElementById("ml_model").textContent = d?.model?.model_type ?? "—";
+  document.getElementById("ml_min_rows").textContent = String(d?.model?.min_train_rows ?? "—");
+  document.getElementById("ml_timeframe").textContent = d?.system?.timeframe ?? "—";
+  document.getElementById("ml_data_source").textContent = d?.data?.source ?? "—";
+
+  const params = d?.model?.params ?? null;
+  document.getElementById("ml_params").textContent = params ? JSON.stringify(params, null, 2) : "—";
+      }
+
+      function posCell(val, alignRight = true) {
+        const td = document.createElement("td");
+        td.className = (alignRight ? "text-right" : "text-left") + " py-2 px-4 whitespace-nowrap";
+        td.textContent = val;
+        return td;
+      }
+
+      async function loadPositions() {
+        const r = await fetch("/api/positions");
+        if (!r.ok) throw new Error("/api/positions failed");
+        const d = await r.json();
+        const positions = d.positions || [];
+
+        renderPositions(positions);
+      }
+
+      function renderPositions(positions) {
+        positions = positions || [];
+
+        document.getElementById("positions_count").textContent = positions.length + " open";
+
+        const tbody = document.getElementById("positions_tbody");
+        tbody.innerHTML = "";
+
+  for (const p of positions) {
+          const tr = document.createElement("tr");
+          tr.className = "border-b border-slate-800/60";
+
+          const pair = p.contract ?? "—";
+
+          // Gate USDT futures: size > 0 long, size < 0 short.
+          const sizeNum = Number(p.size ?? 0);
+          const positionSide = sizeNum > 0 ? "LONG" : sizeNum < 0 ? "SHORT" : "FLAT";
+
+          const lev = p.lever ?? p.leverage ?? null;
+
+          const mark = p.mark_price ?? p.mark ?? null;
+          const entry = p.entry_price ?? p.entry ?? null;
+
+          // TP/SL are derived from open trigger orders merged into /api/positions as:
+          // - p.tp_price (best-effort)
+          // - p.sl_price (best-effort)
+          // Some exchanges return multiple triggers; if that happens, backend will send candidates.
+          // Here we also try to classify with side if we have an array.
+          let tp = p.take_profit ?? p.tp_price ?? null;
+          let sl = p.stop_loss ?? p.sl_price ?? null;
+
+          // If backend ever sends a list of trigger prices, classify them.
+          const triggers = Array.isArray(p.trigger_prices) ? p.trigger_prices.map(Number).filter((x) => !Number.isNaN(x)) : null;
+          if (triggers && triggers.length) {
+            const ref = Number(entry ?? mark);
+            if (!Number.isNaN(ref)) {
+              if (positionSide === "LONG") {
+                const above = triggers.filter((x) => x > ref).sort((a, b) => a - b);
+                const below = triggers.filter((x) => x < ref).sort((a, b) => b - a);
+                if (above.length) tp = above[0];
+                if (below.length) sl = below[0];
+              } else if (positionSide === "SHORT") {
+                const below = triggers.filter((x) => x < ref).sort((a, b) => b - a);
+                const above = triggers.filter((x) => x > ref).sort((a, b) => a - b);
+                if (below.length) tp = below[0];
+                if (above.length) sl = above[0];
+              }
+            }
+          }
+
+          // Exit price is only meaningful for closed trades; for open positions we show “—”.
+          const exitPrice = null;
+
+          const profit = p.unrealised_pnl ?? p.unrealized_pnl ?? p.pnl ?? null;
+
+          // Detect profit delta for animation.
+          const key = String(pair);
+          const profitNumNow = Number(profit);
+          const hadPrev = Object.prototype.hasOwnProperty.call(window.__lastProfitByPair, key);
+          const profitNumPrev = hadPrev ? Number(window.__lastProfitByPair[key]) : null;
+          let profitDeltaSign = 0;
+          if (!Number.isNaN(profitNumNow)) {
+            if (hadPrev && profitNumPrev !== null && !Number.isNaN(profitNumPrev)) {
+              if (profitNumNow > profitNumPrev) profitDeltaSign = 1;
+              else if (profitNumNow < profitNumPrev) profitDeltaSign = -1;
+            }
+            window.__lastProfitByPair[key] = profitNumNow;
+          }
+
+          // A lightweight “state” guess.
+          const state = sizeNum !== 0 ? "OPEN" : "—";
+
+          const pairTd = document.createElement("td");
+          pairTd.className = "text-left py-2 pr-4 whitespace-nowrap font-sans";
+          pairTd.textContent = pair;
+          tr.appendChild(pairTd);
+
+          const posTd = document.createElement("td");
+          posTd.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+
+          const badge = document.createElement("span");
+          badge.className =
+            "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold mr-2 " +
+            (positionSide === "LONG"
+              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+              : positionSide === "SHORT"
+              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+              : "bg-slate-700/30 text-slate-300 border border-slate-600/30");
+          badge.textContent = positionSide;
+          posTd.appendChild(badge);
+
+          const posText = document.createElement("span");
+          posText.textContent = Math.abs(sizeNum).toString();
+          posTd.appendChild(posText);
+          tr.appendChild(posTd);
+
+          tr.appendChild(posCell(lev === null ? "—" : String(lev) + "x"));
+          // PRICE column: show ENTRY price (as requested)
+          tr.appendChild(posCell(entry === null ? "—" : fmtPx(entry)));
+          // MARK PRICE column: live mark price from Gate position payload
+          tr.appendChild(posCell(mark === null ? "—" : fmtPx(mark)));
+          tr.appendChild(posCell(tp === null ? "—" : fmtPx(tp)));
+          tr.appendChild(posCell(sl === null ? "—" : fmtPx(sl)));
+          tr.appendChild(posCell(entry === null ? "—" : fmtPx(entry)));
+          tr.appendChild(posCell(exitPrice === null ? "—" : fmtUsd(exitPrice)));
+
+          const pnlTd = posCell(profit === null ? "—" : fmtUsd(profit));
+          const pnlNum = Number(profit);
+          if (!Number.isNaN(pnlNum)) {
+            pnlTd.className += pnlNum >= 0 ? " text-emerald-400" : " text-rose-400";
+          }
+          // Flash on change (only when we had a previous value).
+          if (profitDeltaSign !== 0) {
+            pnlTd.className += profitDeltaSign > 0 ? " qt-flash-green" : " qt-flash-red";
+          }
+          tr.appendChild(pnlTd);
+
+          const stateTd = document.createElement("td");
+          stateTd.className = "text-left py-2 pl-4 whitespace-nowrap font-sans text-slate-300";
+          stateTd.textContent = state;
+          tr.appendChild(stateTd);
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      function startPositionsWebSocket() {
+        // Prefer WS for a more realtime feel; fallback to polling on error.
+        try {
+          const proto = location.protocol === "https:" ? "wss" : "ws";
+          const ws = new WebSocket(`${proto}://${location.host}/ws/positions`);
+
+          ws.onmessage = (ev) => {
+            try {
+              const msg = JSON.parse(ev.data);
+              if (msg?.type === "positions") {
+                renderPositions(msg.positions || []);
+                renderUnrealizedCardFromWs(msg);
+              }
+            } catch {
+              // Ignore parsing errors.
+            }
+          };
+
+          ws.onerror = () => {
+            try {
+              ws.close();
+            } catch {}
+          };
+
+          ws.onclose = () => {
+            // Fallback: refresh positions via polling every 2s.
+            // (We keep the main refresh loop at 10s for other cards.)
+            if (!window.__positionsPollingFallback) {
+              window.__positionsPollingFallback = true;
+              setInterval(() => {
+                loadPositions().catch(() => {});
+              }, 2000);
+            }
+          };
+        } catch {
+          // If WS isn't supported, fallback to polling.
+          if (!window.__positionsPollingFallback) {
+            window.__positionsPollingFallback = true;
+            setInterval(() => {
+              loadPositions().catch(() => {});
+            }, 2000);
+          }
+        }
+      }
+
+      function weeklyCard(label, value) {
+        const box = document.createElement("div");
+        box.className = "rounded-lg bg-slate-950/40 border border-slate-800 p-4";
+        const l = document.createElement("div");
+        l.className = "text-xs text-slate-400";
+        l.textContent = label;
+        const v = document.createElement("div");
+        v.className = "text-lg font-mono mt-1";
+        v.textContent = value;
+        box.appendChild(l);
+        box.appendChild(v);
+        return box;
+      }
+
+      async function loadWeekly() {
+        const r = await fetch("/api/weekly");
+        if (!r.ok) throw new Error("/api/weekly failed");
+        const d = await r.json();
+        const w = d.weekly;
+
+        const el = document.getElementById("weekly");
+        el.innerHTML = "";
+
+        if (!w) {
+          el.appendChild(weeklyCard("Weekly", "No data"));
+          return;
+        }
+
+        el.appendChild(weeklyCard("Week", w.week_id ?? "—"));
+        el.appendChild(weeklyCard("Trades", String(w.trades ?? "—")));
+        el.appendChild(weeklyCard("Total PnL", fmtUsd(w.total_pnl)));
+        el.appendChild(weeklyCard("Return %", (w.return_pct ?? 0).toFixed ? (Number(w.return_pct)).toFixed(2) + "%" : String(w.return_pct)));
+        el.appendChild(weeklyCard("Win rate", ((Number(w.win_rate) || 0) * 100).toFixed(1) + "%"));
+        el.appendChild(weeklyCard("Profit factor", String(w.profit_factor ?? "—")));
+        el.appendChild(weeklyCard("Max DD", String(w.max_drawdown ?? "—")));
+        el.appendChild(weeklyCard("Sharpe", String(w.sharpe ?? "—")));
+      }
+
+      async function loadStats() {
+        const r = await fetch("/api/stats");
+        if (!r.ok) throw new Error("/api/stats failed");
+        const d = await r.json();
+        const s = d.stats;
+
+        if (!s) {
+          document.getElementById("winrate").textContent = "—";
+          document.getElementById("closed_trades").textContent = "—";
+          document.getElementById("total_pnl").textContent = "—";
+          document.getElementById("avg_pnl").textContent = "—";
+          return;
+        }
+
+        document.getElementById("closed_trades").textContent = String(s.closed_trades ?? "—");
+        document.getElementById("winrate").textContent = s.winrate === null || s.winrate === undefined ? "—" : fmtPct(s.winrate);
+        document.getElementById("total_pnl").textContent = fmtUsd(s.total_pnl);
+        document.getElementById("avg_pnl").textContent = s.avg_pnl === null || s.avg_pnl === undefined ? "—" : fmtUsd(s.avg_pnl);
+
+        // DEX PERFORMANCE METRICS card
+        try {
+          const totalNet = Number(s.total_pnl ?? 0);
+          const wins = Number(s.wins ?? 0);
+          const losses = Number(s.losses ?? 0);
+          const allWr = d.alltime_winrate;
+          const wr = allWr === null || allWr === undefined || Number.isNaN(Number(allWr)) ? null : Number(allWr);
+
+          const totalNetEl = document.getElementById("dex_total_net_pnl");
+          totalNetEl.textContent = (totalNet >= 0 ? "+" : "") + fmtUsd(totalNet);
+          totalNetEl.className = "text-lg font-mono mt-2 " + (totalNet >= 0 ? "text-emerald-400" : "text-rose-400");
+
+          document.getElementById("dex_total_win").textContent = wins.toLocaleString();
+          document.getElementById("dex_total_loss").textContent = losses.toLocaleString();
+
+          document.getElementById("dex_avg_total_pnl").textContent = s.avg_pnl === null || s.avg_pnl === undefined ? "—" : fmtUsd(s.avg_pnl);
+          document.getElementById("dex_avg_win_rate").textContent = wr === null ? "—" : fmtPct(wr);
+          document.getElementById("dex_avg_win_rate_2").textContent = wr === null ? "—" : fmtPct(wr);
+
+          document.getElementById("dex_avg_apy").textContent = "—";
+        } catch (e) {
+          // Don’t break stats rendering if card IDs are edited.
+        }
+
+        // Charts
+        renderChartsFromStats(d);
+      }
+
+      let _chartAlltimeWinrate = null;
+      let _chartMonthlyNet = null;
+      let _chartMonthlyWL = null;
+
+      function renderChartsFromStats(d) {
+        if (!window.Chart) return;
+
+        const allWr = d.alltime_winrate;
+        const monthly = Array.isArray(d.monthly) ? d.monthly : [];
+
+        // --- All-time winrate doughnut ---
+        const wr = allWr === null || allWr === undefined || Number.isNaN(Number(allWr)) ? null : Number(allWr);
+        const ctxWr = document.getElementById("chart_alltime_winrate")?.getContext?.("2d");
+        if (ctxWr) {
+          if (_chartAlltimeWinrate) _chartAlltimeWinrate.destroy();
+          const val = wr === null ? 0 : Math.max(0, Math.min(1, wr));
+          _chartAlltimeWinrate = new Chart(ctxWr, {
+            type: "doughnut",
+            data: {
+              labels: ["Win", "Loss"],
+              datasets: [
+                {
+                  data: [val, 1 - val],
+                  backgroundColor: ["rgba(16,185,129,0.55)", "rgba(244,63,94,0.45)"],
+                  borderColor: ["rgba(16,185,129,0.9)", "rgba(244,63,94,0.7)"],
+                  borderWidth: 1,
+                  cutout: "70%",
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => {
+                      const v = Number(ctx.raw || 0);
+                      return ctx.label + ": " + (v * 100).toFixed(1) + "%";
+                    },
+                  },
+                },
+                title: {
+                  display: true,
+                  text: wr === null ? "No data" : "Winrate: " + (val * 100).toFixed(1) + "%",
+                  color: "#cbd5e1",
+                  font: { size: 12, family: "ui-monospace" },
+                  padding: { bottom: 6 },
+                },
+              },
+            },
+          });
+        }
+
+        // --- Monthly net PnL bar ---
+        const ctxNet = document.getElementById("chart_monthly_netpnl")?.getContext?.("2d");
+        if (ctxNet) {
+          if (_chartMonthlyNet) _chartMonthlyNet.destroy();
+          const labels = monthly.map((r) => r.month);
+          const vals = monthly.map((r) => Number(r.net_pnl || 0));
+          _chartMonthlyNet = new Chart(ctxNet, {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "Net PnL",
+                  data: vals,
+                  backgroundColor: vals.map((v) => (v >= 0 ? "rgba(16,185,129,0.55)" : "rgba(244,63,94,0.45)")),
+                  borderColor: vals.map((v) => (v >= 0 ? "rgba(16,185,129,0.9)" : "rgba(244,63,94,0.7)")),
+                  borderWidth: 1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => "PnL: " + fmtUsd(ctx.raw),
+                  },
+                },
+              },
+              scales: {
+                x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
+                y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
+              },
+            },
+          });
+        }
+
+        // --- Monthly win/loss stacked bar ---
+        const ctxWL = document.getElementById("chart_monthly_wl")?.getContext?.("2d");
+        if (ctxWL) {
+          if (_chartMonthlyWL) _chartMonthlyWL.destroy();
+          const labels = monthly.map((r) => r.month);
+          const wins = monthly.map((r) => Number(r.wins || 0));
+          const losses = monthly.map((r) => Number(r.losses || 0));
+          _chartMonthlyWL = new Chart(ctxWL, {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "Wins",
+                  data: wins,
+                  backgroundColor: "rgba(16,185,129,0.55)",
+                  borderColor: "rgba(16,185,129,0.9)",
+                  borderWidth: 1,
+                  stack: "wl",
+                },
+                {
+                  label: "Losses",
+                  data: losses,
+                  backgroundColor: "rgba(244,63,94,0.45)",
+                  borderColor: "rgba(244,63,94,0.7)",
+                  borderWidth: 1,
+                  stack: "wl",
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { labels: { color: "#cbd5e1" } },
+              },
+              scales: {
+                x: { stacked: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
+                y: { stacked: true, ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.08)" } },
+              },
+            },
+          });
+        }
+      }
+
+      async function loadTrades() {
+        const r = await fetch("/api/trades");
+        if (!r.ok) throw new Error("/api/trades failed");
+        const d = await r.json();
+        const trades = d.trades || [];
+
+        document.getElementById("trades_count").textContent = trades.length + " rows";
+
+        const tbody = document.getElementById("trades_tbody");
+        tbody.innerHTML = "";
+
+        for (const t of trades) {
+          const tr = document.createElement("tr");
+          tr.className = "border-b border-slate-800/60";
+
+          const ts = t.timestamp ?? "—";
+          const asset = t.asset ?? "—";
+          const side = t.side ?? "—";
+          const qty = t.qty ?? "—";
+          const entry = t.entry_price ?? null;
+          const entryFee = t.entry_fee ?? null;
+          const sl = t.stop_price ?? null;
+          const tp = t.tp_price ?? null;
+          const tpOid = t.tp_order_id ?? null;
+          const slOid = t.sl_order_id ?? null;
+
+          const tdTime = document.createElement("td");
+          tdTime.className = "text-left py-2 pr-4 whitespace-nowrap font-sans";
+          // keep it readable without heavy parsing
+          tdTime.textContent = String(ts).replace("T", " ").replace("+00:00", "Z");
+          tr.appendChild(tdTime);
+
+          const tdAsset = document.createElement("td");
+          tdAsset.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+          tdAsset.textContent = asset;
+          tr.appendChild(tdAsset);
+
+          const tdSide = document.createElement("td");
+          tdSide.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+          tdSide.textContent = side;
+          tr.appendChild(tdSide);
+
+          tr.appendChild(posCell(String(qty)));
+          tr.appendChild(posCell(entry === null ? "—" : fmtUsd(entry)));
+          tr.appendChild(posCell(entryFee === null ? "—" : fmtUsd(entryFee)));
+          tr.appendChild(posCell(sl === null ? "—" : fmtUsd(sl)));
+          tr.appendChild(posCell(tp === null ? "—" : fmtUsd(tp)));
+
+          const tdOids = document.createElement("td");
+          tdOids.className = "text-left py-2 pl-4 whitespace-nowrap font-mono text-xs text-slate-300";
+          // Keep it short but useful.
+          const parts = [];
+          if (tpOid) parts.push("TP:" + String(tpOid));
+          if (slOid) parts.push("SL:" + String(slOid));
+          tdOids.textContent = parts.length ? parts.join(" ") : "—";
+          tr.appendChild(tdOids);
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function loadClosures() {
+        const r = await fetch("/api/closures");
+        if (!r.ok) throw new Error("/api/closures failed");
+        const d = await r.json();
+        const rows = d.closures || [];
+
+        document.getElementById("closures_count").textContent = rows.length + " rows";
+
+        const tbody = document.getElementById("closures_tbody");
+        tbody.innerHTML = "";
+
+        for (const c of rows) {
+          const tr = document.createElement("tr");
+          tr.className = "border-b border-slate-800/60";
+
+          const ts = c.timestamp ?? "—";
+          const asset = c.asset ?? "—";
+          const reason = c.exit_reason ?? "—";
+          const qty = c.qty ?? "—";
+          const entry = c.entry_price ?? null;
+          const exit = c.exit_price ?? null;
+          const fees = c.fees ?? null;
+          const pnl = c.pnl ?? null;
+          const oid = c.exit_order_id ?? null;
+
+          const tdTime = document.createElement("td");
+          tdTime.className = "text-left py-2 pr-4 whitespace-nowrap font-sans";
+          tdTime.textContent = String(ts).replace("T", " ").replace("+00:00", "Z");
+          tr.appendChild(tdTime);
+
+          const tdAsset = document.createElement("td");
+          tdAsset.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+          tdAsset.textContent = asset;
+          tr.appendChild(tdAsset);
+
+          const tdReason = document.createElement("td");
+          tdReason.className = "text-left py-2 px-4 whitespace-nowrap font-sans text-slate-300";
+          tdReason.textContent = reason;
+          tr.appendChild(tdReason);
+
+          tr.appendChild(posCell(String(qty)));
+          tr.appendChild(posCell(entry === null ? "—" : fmtUsd(entry)));
+          tr.appendChild(posCell(exit === null ? "—" : fmtUsd(exit)));
+          tr.appendChild(posCell(fees === null ? "—" : fmtUsd(fees)));
+
+          const pnlTd = posCell(pnl === null ? "—" : fmtUsd(pnl));
+          const pnlNum = Number(pnl);
+          if (!Number.isNaN(pnlNum)) {
+            pnlTd.className += pnlNum >= 0 ? " text-emerald-400" : " text-rose-400";
+          }
+          tr.appendChild(pnlTd);
+
+          const tdOid = document.createElement("td");
+          tdOid.className = "text-left py-2 pl-4 whitespace-nowrap font-mono text-xs text-slate-300";
+          tdOid.textContent = oid ? String(oid) : "—";
+          tr.appendChild(tdOid);
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      async function refresh() {
+        try {
+          setStatus("Refreshing…");
+          await Promise.all([
+            loadAccount(),
+            loadUnrealizedPnL(),
+            loadMlConfig(),
+            loadPositions(),
+            loadWeekly(),
+            loadStats(),
+            loadTrades(),
+            loadClosures(),
+          ]);
+          setStatus("Updated " + new Date().toLocaleTimeString());
+        } catch (e) {
+          console.error(e);
+          setStatus("Error: " + (e?.message || e), false);
+        }
+      }
+
+      refresh();
+  // Make Open Positions realtime-ish.
+  startPositionsWebSocket();
+      setInterval(refresh, 10_000);
+    </script>
+  </body>
+</html>

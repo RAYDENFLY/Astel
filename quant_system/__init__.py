@@ -1,0 +1,1 @@
+"""Quantitative trading system package."""
