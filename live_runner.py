@@ -23,6 +23,7 @@ Run from repo root:
 from __future__ import annotations
 
 import logging
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,10 +123,70 @@ def load_config(config_path: Path) -> Dict[str, Any]:
 def setup_logging(cfg: Dict[str, Any]) -> None:
     level_name = str(cfg.get("logging", {}).get("level", "INFO")).upper()
     level = getattr(logging, level_name, logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
+    use_json = bool((cfg.get("logging") or {}).get("json", False))
+    if not use_json:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        )
+        return
+
+    # Minimal JSON logging formatter (no external deps).
+    class _JsonFormatter(logging.Formatter):
+        def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+            payload: Dict[str, Any] = {
+                "ts": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
+                "level": record.levelname,
+                "logger": record.name,
+                "msg": record.getMessage(),
+            }
+            # Attach exception info if present.
+            if record.exc_info:
+                payload["exc"] = self.formatException(record.exc_info)
+            # Include extra fields if present.
+            for k, v in record.__dict__.items():
+                if k.startswith("_"):
+                    continue
+                if k in {
+                    "name",
+                    "msg",
+                    "args",
+                    "levelname",
+                    "levelno",
+                    "pathname",
+                    "filename",
+                    "module",
+                    "exc_info",
+                    "exc_text",
+                    "stack_info",
+                    "lineno",
+                    "funcName",
+                    "created",
+                    "msecs",
+                    "relativeCreated",
+                    "thread",
+                    "threadName",
+                    "processName",
+                    "process",
+                }:
+                    continue
+                # Keep JSON-serializable only.
+                try:
+                    json.dumps(v)
+                    payload[k] = v
+                except Exception:
+                    payload[k] = str(v)
+            return json.dumps(payload, ensure_ascii=False)
+
+    root = logging.getLogger()
+    root.setLevel(level)
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    handler.setFormatter(_JsonFormatter())
+    root.addHandler(handler)
 
 
 def _latest_closed_candle_ts(asset_csv: Path, timeframe: str) -> pd.Timestamp:
@@ -207,6 +268,176 @@ def _gate_contract_for_asset(asset: str) -> str:
     If your naming differs, implement a mapping in config and use it here.
     """
     return asset
+
+def _ensure_tpsl_for_position(
+    *,
+    executor: GateExecutor,
+    contract: str,
+    side: str,
+    abs_size: int,
+    tp_price: Optional[float],
+    sl_price: Optional[float],
+    trigger_rule: int,
+    log: logging.Logger,
+) -> None:
+    """Best-effort: ensure TP/SL trigger orders exist on exchange for an open position.
+
+    This addresses cases where:
+      - trigger orders were never created,
+      - size changed (scale-in/out) so reduce-only order doesn't cover full size,
+      - trigger rule (mark/last) differs from expectation,
+      - orders were canceled server-side.
+    """
+
+    if abs_size <= 0:
+        return
+
+    desired_close_side = "sell" if str(side).upper() == "LONG" else "buy"
+
+    # ── helpers to extract fields from Gate plan-order schema ──────────────────
+    # Gate /price_orders objects use the new schema where tag is in initial.text,
+    # and size is in initial.size. Top-level `side` / `size` may be absent.
+
+    def _tag(o: Dict[str, Any]) -> str:
+        # New schema: tag is in initial.text
+        initial = o.get("initial") or {}
+        t = initial.get("text") or o.get("text") or (o.get("order") or {}).get("text") or ""
+        return str(t)
+
+    def _rule(o: Dict[str, Any]) -> Optional[int]:
+        trig = o.get("trigger") or {}
+        r = trig.get("rule")
+        try:
+            return int(r)
+        except Exception:
+            return None
+
+    def _order_type(o: Dict[str, Any]) -> str:
+        """Return 'close-long-order' or 'close-short-order' or empty."""
+        return str(o.get("order_type") or "").lower()
+
+    def _size(o: Dict[str, Any]) -> Optional[int]:
+        # New schema: size lives in initial.size
+        initial = o.get("initial") or {}
+        raw = initial.get("size") or o.get("size")
+        try:
+            return abs(int(float(raw))) if raw is not None else None
+        except Exception:
+            return None
+
+    def _is_ok(o: Dict[str, Any]) -> bool:
+        # Validate order_type matches desired side.
+        ot = _order_type(o)
+        if ot:
+            # close-long-order means the position was LONG → close side = sell
+            expected_ot = "close-long-order" if str(side).upper() == "LONG" else "close-short-order"
+            if ot != expected_ot:
+                return False
+        osz = _size(o)
+        if osz is None or osz != int(abs_size):
+            return False
+        r = _rule(o)
+        if r is not None and int(r) != int(trigger_rule):
+            return False
+        return True
+
+    def _cancel_all(orders: List[Dict[str, Any]]) -> None:
+        for o in orders:
+            oid = o.get("id")
+            if not oid:
+                continue
+            try:
+                executor.cancel_trigger_order(str(oid))
+                log.info("Cancelled stale trigger order id=%s contract=%s", oid, contract)
+            except Exception as _ce:
+                log.warning("Failed to cancel trigger order id=%s: %s", oid, _ce)
+
+    # Pull open trigger orders for this contract.
+    try:
+        open_triggers = executor.get_open_trigger_orders(contract=contract)
+    except Exception:
+        log.exception("Failed to list trigger orders for %s", contract)
+        return
+
+    log.info(
+        "TPSL-resync contract=%s side=%s abs_size=%d tp=%.6g sl=%.6g open_triggers=%d",
+        contract, side, abs_size,
+        tp_price if tp_price is not None else float("nan"),
+        sl_price if sl_price is not None else float("nan"),
+        len(open_triggers),
+    )
+
+    tp_orders = [o for o in open_triggers if _tag(o) == "t-qt-tp"]
+    sl_orders = [o for o in open_triggers if _tag(o) == "t-qt-sl"]
+
+    if tp_orders or sl_orders:
+        log.info(
+            "TPSL-resync existing: tp_orders=%d sl_orders=%d details=%s",
+            len(tp_orders), len(sl_orders),
+            [{"id": o.get("id"), "tag": _tag(o), "order_type": _order_type(o), "size": _size(o)} for o in (tp_orders + sl_orders)],
+        )
+
+    # Replace TP if missing or mismatched.
+    if tp_price is not None:
+        keep = [o for o in tp_orders if _is_ok(o)]
+        if keep:
+            log.info("TPSL-resync TP already OK for %s (order_id=%s)", contract, keep[0].get("id"))
+        else:
+            stale = [o for o in tp_orders if not _is_ok(o)]
+            if stale:
+                log.warning(
+                    "TPSL-resync cancelling stale TP orders for %s: %s",
+                    contract,
+                    [{"id": o.get("id"), "order_type": _order_type(o), "size": _size(o)} for o in stale],
+                )
+                _cancel_all(stale)
+            try:
+                res = executor.place_tpsl_orders(
+                    contract=contract,
+                    position_side=str(side).upper(),
+                    size=float(abs_size),
+                    take_profit=float(tp_price),
+                    stop_loss=None,
+                    trigger_rule=int(trigger_rule),
+                )
+                tp_resp = res.get("tp") or {}
+                log.warning(
+                    "TPSL-resync placed TP for %s: order_id=%s trigger_price=%.6g",
+                    contract, tp_resp.get("id"), tp_price,
+                )
+            except Exception:
+                log.exception("Failed to (re)place TP trigger for %s", contract)
+
+    # Replace SL if missing or mismatched.
+    if sl_price is not None:
+        keep = [o for o in sl_orders if _is_ok(o)]
+        if keep:
+            log.info("TPSL-resync SL already OK for %s (order_id=%s)", contract, keep[0].get("id"))
+        else:
+            stale = [o for o in sl_orders if not _is_ok(o)]
+            if stale:
+                log.warning(
+                    "TPSL-resync cancelling stale SL orders for %s: %s",
+                    contract,
+                    [{"id": o.get("id"), "order_type": _order_type(o), "size": _size(o)} for o in stale],
+                )
+                _cancel_all(stale)
+            try:
+                res = executor.place_tpsl_orders(
+                    contract=contract,
+                    position_side=str(side).upper(),
+                    size=float(abs_size),
+                    take_profit=None,
+                    stop_loss=float(sl_price),
+                    trigger_rule=int(trigger_rule),
+                )
+                sl_resp = res.get("sl") or {}
+                log.warning(
+                    "TPSL-resync placed SL for %s: order_id=%s trigger_price=%.6g",
+                    contract, sl_resp.get("id"), sl_price,
+                )
+            except Exception:
+                log.exception("Failed to (re)place SL trigger for %s", contract)
 
 
 def _position_direction_for_contract(positions: List[Dict[str, Any]], contract: str) -> int:
@@ -445,6 +676,12 @@ def run_live(config_path: Path) -> None:
     short_tpsl_enabled = bool(exec_cfg.get("short_tpsl_override", False))
     short_sl_mult = float(exec_cfg.get("short_sl_mult", 1.0) or 1.0)
     short_tp_mult = float(exec_cfg.get("short_tp_mult", 1.0) or 1.0)
+
+    # Gate trigger rule for TP/SL plan orders (default: last price).
+    try:
+        trigger_rule = int(exec_cfg.get("trigger_rule", 1) or 1)
+    except Exception:
+        trigger_rule = 1
     # Guard rails
     if short_sl_mult <= 0:
         short_sl_mult = 1.0
@@ -694,6 +931,13 @@ def run_live(config_path: Path) -> None:
                         continue  # still open on exchange
 
                     # Exchange is flat: detect whether TP or SL executed.
+                    log.warning(
+                        "Reconcile %s: journal says OPEN but exchange size=0. Resolving closure. "
+                        "trade_id=%s entry_price=%s",
+                        contract,
+                        t.get("id") or t.get("trade_id"),
+                        t.get("entry_price"),
+                    )
                     exit_reason = "EXCHANGE_CLOSE"
                     exit_order_id: Optional[str] = None
 
@@ -712,20 +956,38 @@ def run_live(config_path: Path) -> None:
                     for key, reason in (("tp_order_id", "TAKE_PROFIT"), ("sl_order_id", "STOP_LOSS")):
                         oid = t.get(key)
                         if not oid:
+                            log.debug("Reconcile %s: no %s stored in journal row", contract, key)
                             continue
                         try:
                             o = executor.get_trigger_order(str(oid))
                             status = str(o.get("status", "")).lower()
+                            # finish_as holds "take_profit"/"stop_loss" when applicable.
+                            finish_as = str(o.get("finish_as", "") or "").lower()
+                            # order_id is the futures order generated when the trigger fires.
+                            # `id` is the plan-order's own ID — do NOT use it as exit order.
+                            fired_order_id = str(
+                                o.get("order_id") or o.get("futures_order_id") or ""
+                            ) or None
+                            log.info(
+                                "Reconcile %s: trigger order %s=%s status=%s finish_as=%s fired_order_id=%s",
+                                contract, key, oid, status, finish_as, fired_order_id,
+                            )
                             if status in {"finished", "triggered", "closed", "done"}:
                                 exit_reason = reason
-                                # Some payloads include the generated futures order id after trigger.
-                                exit_order_id = (
-                                    str(o.get("order_id") or o.get("futures_order_id") or o.get("id") or "")
-                                    or None
+                                exit_order_id = fired_order_id
+                                log.warning(
+                                    "Reconcile %s: %s TRIGGERED → exit_reason=%s exit_order_id=%s",
+                                    contract, key.upper(), exit_reason, exit_order_id,
                                 )
                                 break
                         except Exception:
+                            log.exception("Reconcile %s: failed to fetch trigger order %s=%s", contract, key, oid)
                             continue
+
+                    log.info(
+                        "Reconcile %s: exchange FLAT → exit_reason=%s exit_order_id=%s",
+                        contract, exit_reason, exit_order_id,
+                    )
 
                     # Best-effort exit price/fees/pnl from fills.
                     entry_px = float(t.get("entry_price") or 0.0)
@@ -758,6 +1020,11 @@ def run_live(config_path: Path) -> None:
                         if fee is not None:
                             exit_fee = float(fee)
                         realized_pnl = rpnl
+                    else:
+                        log.warning(
+                            "Reconcile %s: no exit_order_id found — exit price will default to entry_price=%.6g",
+                            contract, entry_px,
+                        )
 
                     closure = _mk_exit_journal_record(
                         ts=center_ts,
@@ -801,6 +1068,17 @@ def run_live(config_path: Path) -> None:
 
                     journal.log_trade_exit(closure)
                     journal.update_equity(ts=center_ts, equity=equity)
+
+                    log.warning(
+                        "Reconcile %s: JOURNAL CLOSED trade_id=%s exit_reason=%s exit_price=%.6g "
+                        "pnl=%s exit_order_id=%s",
+                        contract,
+                        closure.get("trade_id"),
+                        exit_reason,
+                        exit_px,
+                        closure.get("pnl"),
+                        exit_order_id,
+                    )
 
                     # Clear last close hint to avoid reusing it.
                     if last_oid:
@@ -881,6 +1159,49 @@ def run_live(config_path: Path) -> None:
             # Refresh positions after potential closes.
             positions = executor.get_open_positions()
             time.sleep(0.2)
+
+            # TP/SL resync: ensure every open exchange position has matching reduce-only triggers.
+            # Best-effort and low frequency (only on new candle detection).
+            try:
+                open_by_contract: Dict[str, Dict[str, Any]] = {}
+                try:
+                    for t in journal.get_open_trades():
+                        c = _gate_contract_for_asset(str(t.get("asset")))
+                        open_by_contract[c] = t
+                except Exception:
+                    open_by_contract = {}
+
+                for p in positions:
+                    c = str(p.get("contract") or "")
+                    if not c:
+                        continue
+                    try:
+                        sz = float(p.get("size", 0) or 0)
+                    except Exception:
+                        sz = 0.0
+                    if sz == 0.0:
+                        continue
+
+                    pos_side = "LONG" if sz > 0 else "SHORT"
+                    abs_size = int(abs(sz))
+                    jt = open_by_contract.get(c) or {}
+                    tp_px = jt.get("tp_price")
+                    sl_px = jt.get("stop_price")
+                    tp_px_f = float(tp_px) if tp_px is not None else None
+                    sl_px_f = float(sl_px) if sl_px is not None else None
+
+                    _ensure_tpsl_for_position(
+                        executor=executor,
+                        contract=c,
+                        side=pos_side,
+                        abs_size=abs_size,
+                        tp_price=tp_px_f,
+                        sl_price=sl_px_f,
+                        trigger_rule=int(trigger_rule),
+                        log=log,
+                    )
+            except Exception:
+                log.exception("TP/SL resync failed")
 
             # Cap concurrently open pairs (contracts).
             max_open_pairs = int((cfg.get("execution") or {}).get("max_open_pairs", 5) or 0)
@@ -1038,6 +1359,7 @@ def run_live(config_path: Path) -> None:
                         size=float(abs(signed_size)),
                         take_profit=tp_price,
                         stop_loss=float(rm["stop_price"]),
+                        trigger_rule=int(trigger_rule),
                     )
                     try:
                         if isinstance(tpsl_res, dict):
@@ -1045,6 +1367,12 @@ def run_live(config_path: Path) -> None:
                                 tp_order_id = str(tpsl_res["tp"].get("id", "")) or None
                             if tpsl_res.get("sl") and isinstance(tpsl_res.get("sl"), dict):
                                 sl_order_id = str(tpsl_res["sl"].get("id", "")) or None
+                        log.warning(
+                            "TPSL placed for %s %s: tp_order_id=%s tp_price=%s sl_order_id=%s sl_price=%s",
+                            asset, sig.side,
+                            tp_order_id, tp_price,
+                            sl_order_id, rm.get("stop_price"),
+                        )
                     except Exception:
                         pass
                 except Exception:

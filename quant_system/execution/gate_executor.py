@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 import urllib.parse
 import urllib.request
@@ -53,7 +54,15 @@ class GateExecutor:
 
     def __post_init__(self) -> None:
         self.log = logging.getLogger(self.__class__.__name__)
+
+        # Verbose raw HTTP payload logging is useful for debugging but noisy in live trading.
+        # Enable with env var GATE_VERBOSE_HTTP=1.
+        self.verbose_http = str(
+            os.environ.get("GATE_VERBOSE_HTTP", "0")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+
         self.base_url = self.base_url.rstrip("/")
+        self._contract_cache: Dict[str, Dict[str, Any]] = {}
 
     # -----------------
     # Public methods
@@ -126,11 +135,10 @@ class GateExecutor:
         if size == 0:
             raise ValueError("Order size cannot be 0")
 
-        direction = 1 if size > 0 else -1
         if open_positions is None:
             open_positions = self.get_open_positions()
-    # NOTE: We intentionally allow adding to an existing position (scaling-in).
-    # Risk/margin constraints are enforced by the caller (RiskManager + live runner).
+        # NOTE: We intentionally allow adding to an existing position (scaling-in).
+        # Risk/margin constraints are enforced by the caller (RiskManager + live runner).
 
         path = "/futures/usdt/orders"
         payload = {
@@ -155,6 +163,7 @@ class GateExecutor:
         size: float,
         take_profit: Optional[float],
         stop_loss: Optional[float],
+        trigger_rule: int = 1,
     ) -> Dict[str, Any]:
         """Place reduce-only TP/SL trigger orders for an open position.
 
@@ -188,6 +197,7 @@ class GateExecutor:
                 order_price=0.0,
                 reduce_only=True,
                 text="t-qt-tp",
+                trigger_rule=int(trigger_rule),
             )
 
         if stop_loss is not None:
@@ -199,9 +209,39 @@ class GateExecutor:
                 order_price=0.0,
                 reduce_only=True,
                 text="t-qt-sl",
+                trigger_rule=int(trigger_rule),
             )
 
         return results
+
+    def _format_price(self, contract: str, price: float) -> str:
+        try:
+            detail = self.get_contract_detail(contract)
+            opr_str = str(detail.get("order_price_round", ""))
+            if opr_str:
+                import decimal
+
+                p = decimal.Decimal(str(price))
+                t = decimal.Decimal(opr_str)
+                if t > 0:
+                    rounded = (p / t).quantize(
+                        decimal.Decimal("1"), rounding=decimal.ROUND_HALF_UP
+                    ) * t
+                    s = format(rounded, "f")
+                    if "." in s:
+                        s = s.rstrip("0").rstrip(".")
+                    if not s:
+                        s = "0"
+                    return s
+        except Exception as e:
+            self.log.warning("Could not format price for %s: %s", contract, e)
+
+        s = f"{price:.8f}"
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        if not s:
+            s = "0"
+        return s
 
     def _place_trigger_order(
         self,
@@ -212,7 +252,8 @@ class GateExecutor:
         trigger_price: float,
         order_price: float = 0.0,
         reduce_only: bool = True,
-    text: str = "t-quant_system-tpsl",
+        text: str = "t-quant_system-tpsl",
+        trigger_rule: int = 1,
     ) -> Dict[str, Any]:
         """Place a futures triggered order (plan order).
 
@@ -222,21 +263,49 @@ class GateExecutor:
         We set `price=0` to make it market when triggered.
         """
         path = "/futures/usdt/price_orders"
+
+        # Gate USDT futures plan-orders are picky about schema.
+        # For this endpoint, contract/side/size belong under the embedded `order`.
+        # Sending them at the top-level can yield confusing errors like
+        #   "Invalid param: contract%!!(string=contract)..."
+        #
+        # Also, futures order size is signed (buy=positive, sell=negative).
+        side_l = str(side).lower().strip()
+        if side_l not in {"buy", "sell"}:
+            raise ValueError("side must be 'buy' or 'sell'")
+
+        signed_size = int(abs(size))
+        if side_l == "sell":
+            signed_size = -signed_size
+
+        # Gate plan order expects top-level 'initial', 'trigger', 'order_type'.
+        # See place-order.md for schema.
+        order_type = None
+        if side_l == "sell":
+            order_type = "close-long-order"
+        elif side_l == "buy":
+            order_type = "close-short-order"
+        else:
+            raise ValueError("side must be 'buy' or 'sell'")
+
         payload: Dict[str, Any] = {
-            "contract": contract,
-            "size": int(size),
-            "side": str(side),
-            "trigger": {
-                "price": str(trigger_price),
-                # Default to last price trigger; Gate supports different types but we keep it simple.
-                "rule": 1,
-            },
-            "order": {
-                "price": "0" if float(order_price) == 0.0 else str(order_price),
+            "initial": {
+                "contract": str(contract),
+                "size": abs(signed_size),
+                # price=0 means market order when triggered
+                "price": "0"
+                if float(order_price) == 0.0
+                else self._format_price(contract, float(order_price)),
                 "tif": "ioc",
-                "reduce_only": bool(reduce_only),
-                "text": str(text),
             },
+            "trigger": {
+                "strategy_type": 0,
+                "price_type": 0,
+                "price": self._format_price(contract, float(trigger_price)),
+                "rule": int(trigger_rule),
+                "expiration": 86400,
+            },
+            "order_type": order_type,
         }
         return self._request_json("POST", path, params=None, payload=payload)
 
@@ -269,14 +338,22 @@ class GateExecutor:
         Endpoint:
             GET /futures/usdt/contracts/{contract}
         """
+        if contract in self._contract_cache:
+            return self._contract_cache[contract]
+
         path = f"/futures/usdt/contracts/{contract}"
         res = self._request_json("GET", path, params=None, payload=None)
         if isinstance(res, dict):
+            self._contract_cache[contract] = res
             return res
         # Some Gate responses might wrap; keep best-effort.
-        return {"data": res}
+        data = {"data": res}
+        self._contract_cache[contract] = data
+        return data
 
-    def get_open_trigger_orders(self, *, contract: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_open_trigger_orders(
+        self, *, contract: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """List open futures trigger/plan orders.
 
         Endpoint:
@@ -292,6 +369,15 @@ class GateExecutor:
         if isinstance(res, list):
             return res
         return [res]
+
+    def cancel_trigger_order(self, order_id: str) -> Dict[str, Any]:
+        """Cancel a futures trigger/plan order.
+
+        Endpoint:
+            DELETE /futures/usdt/price_orders/{order_id}
+        """
+        path = f"/futures/usdt/price_orders/{order_id}"
+        return self._request_json("DELETE", path, params=None, payload=None)
 
     def get_trigger_order(self, order_id: str) -> Dict[str, Any]:
         """Fetch a futures trigger/plan order by id.
@@ -338,7 +424,12 @@ class GateExecutor:
             return None
 
         # Send opposite order.
-        return self.place_market_order(contract=contract, size=-size, open_positions=positions, portfolio_risk_ok=True)
+        return self.place_market_order(
+            contract=contract,
+            size=-size,
+            open_positions=positions,
+            portfolio_risk_ok=True,
+        )
 
     def get_order(self, order_id: str) -> Dict[str, Any]:
         """Fetch a futures order by id.
@@ -422,7 +513,8 @@ class GateExecutor:
                     raw = resp.read().decode("utf-8")
 
                 self.log.info("Response code: %s", status)
-                self.log.info("Response body: %s", raw)
+                if self.verbose_http:
+                    self.log.info("Response body: %s", raw)
 
                 if status < 200 or status >= 300:
                     raise GateHTTPError(f"Non-2xx response: {status} body={raw}")
@@ -434,14 +526,35 @@ class GateExecutor:
             except urllib.error.HTTPError as e:
                 # Gate returns useful JSON error details in the body for 4xx/5xx.
                 try:
+                    # Avoid rare hangs when reading the error body.
+                    try:
+                        if getattr(e, "fp", None) is not None:
+                            e.fp.raw._sock.settimeout(2)  # type: ignore[attr-defined]
+                    except Exception:  # noqa: BLE001
+                        pass
                     err_raw = e.read().decode("utf-8")
                 except Exception:  # noqa: BLE001
                     err_raw = ""
 
+                # Keep console readable: include only a short excerpt.
+                err_excerpt = err_raw
+                if len(err_excerpt) > 1200:
+                    err_excerpt = err_excerpt[:1200] + "...<truncated>"
+
                 last_err = GateHTTPError(
-                    f"HTTP {getattr(e, 'code', '?')}: {getattr(e, 'reason', '')} body={err_raw}"
+                    f"HTTP {getattr(e, 'code', '?')}: {getattr(e, 'reason', '')} body={err_excerpt}"
                 )
-                self.log.exception("Gate request failed (attempt %d/3): %s", attempt, str(last_err))
+                self.log.error(
+                    "Gate request failed",
+                    extra={
+                        "attempt": attempt,
+                        "method": method,
+                        "url": url,
+                        "status": int(getattr(e, "code", 0) or 0),
+                        "error": str(getattr(e, "reason", "")),
+                        "body": err_excerpt,
+                    },
+                )
                 if attempt < 3:
                     time.sleep(0.75 * attempt)
                     continue
@@ -449,7 +562,9 @@ class GateExecutor:
 
             except Exception as e:  # noqa: BLE001 (we re-raise after retries)
                 last_err = e
-                self.log.exception("Gate request failed (attempt %d/3): %s", attempt, str(e))
+                self.log.exception(
+                    "Gate request failed (attempt %d/3): %s", attempt, str(e)
+                )
                 if attempt < 3:
                     time.sleep(0.75 * attempt)
                     continue
@@ -457,7 +572,9 @@ class GateExecutor:
 
         raise GateHTTPError(f"Gate request failed after retries: {last_err}")
 
-    def _build_url(self, path: str, params: Optional[Dict[str, Any]]) -> Tuple[str, str, str]:
+    def _build_url(
+        self, path: str, params: Optional[Dict[str, Any]]
+    ) -> Tuple[str, str, str]:
         request_path = path if path.startswith("/") else f"/{path}"
         query_string = ""
         if params:
@@ -485,7 +602,9 @@ class GateExecutor:
             return request_path
         return base_path + request_path
 
-    def _signed_headers(self, method: str, request_path: str, query_string: str, body: str) -> Dict[str, str]:
+    def _signed_headers(
+        self, method: str, request_path: str, query_string: str, body: str
+    ) -> Dict[str, str]:
         ts = str(int(time.time()))
         body_hash = hashlib.sha512(body.encode("utf-8")).hexdigest()
 
@@ -493,7 +612,9 @@ class GateExecutor:
         #   METHOD + "\n" + URL_PATH + "\n" + QUERY_STRING + "\n" + SHA512(body) + "\n" + TIMESTAMP
         # Query string must be exactly as in the URL (no leading '?'). Use empty string if none.
         signing_path = self._signing_path(request_path)
-        sign_payload = "\n".join([method, signing_path, query_string or "", body_hash, ts])
+        sign_payload = "\n".join(
+            [method, signing_path, query_string or "", body_hash, ts]
+        )
 
         signature = hmac.new(
             self.api_secret.encode("utf-8"),
@@ -518,7 +639,9 @@ class GateExecutor:
             return 0
 
     @staticmethod
-    def _find_position(positions: List[Dict[str, Any]], contract: str) -> Optional[Dict[str, Any]]:
+    def _find_position(
+        positions: List[Dict[str, Any]], contract: str
+    ) -> Optional[Dict[str, Any]]:
         for p in positions:
             if str(p.get("contract")) == contract:
                 return p

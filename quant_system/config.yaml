@@ -80,6 +80,11 @@ execution:
   # TP distance multiplier (relative to 1R=stop_distance): < 1.0 = closer TP
   short_tp_mult: 0.6
 
+  # Gate trigger rule used for TP/SL plan orders.
+  # 1 = last price (default). Some users prefer mark price; set accordingly if supported by your account/contract.
+  # Note: Gate may interpret rule values differently; verify in Gate UI after placing a trigger.
+  trigger_rule: 1
+
 # Dashboard display helpers (optional)
 display:
   usdt_to_idr: 16000  # set your preferred rate; dashboard uses this for Rp conversion
@@ -123,3 +128,5 @@ paths:
 
 logging:
   level: "INFO"
+  # If true, console logs are emitted as one-line JSON objects (cleaner + easier to search).
+  json: true
