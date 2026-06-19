@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuantumTrade — AI Agent Research Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+    <style>
+      @keyframes pulse-green { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.4)} 50%{box-shadow:0 0 0 6px rgba(16,185,129,0)} }
+      @keyframes pulse-red   { 0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,0.4)} 50%{box-shadow:0 0 0 6px rgba(244,63,94,0)} }
+      @keyframes pulse-amber { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.4)} 50%{box-shadow:0 0 0 6px rgba(245,158,11,0)} }
+      .pulse-green { animation:pulse-green 2s infinite }
+      .pulse-red   { animation:pulse-red 2s infinite }
+      .pulse-amber { animation:pulse-amber 2s infinite }
+      .fade-in { animation:fadeIn 0.4s ease-out }
+      @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="max-w-[120rem] mx-auto p-4 md:p-6 space-y-6">
+      <!-- Header -->
+      <header class="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight">
+            <i class="fa-solid fa-brain mr-2 text-fuchsia-400"></i>
+            AI Agent Research Console
+          </h1>
+          <p class="text-sm text-slate-400">
+            Read-only. Auto-refresh every 10s.
+            <a href="/" class="text-sky-400 hover:text-sky-300 ml-2 underline">← Trading Dashboard</a>
+          </p>
+        </div>
+        <div id="status_badge" class="text-xs font-semibold px-3 py-1.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+          Loading…
+        </div>
+      </header>
+
+      <!-- Row 1: Status + Survival + Treasury + Health -->
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 fade-in">
+        <!-- Agent Status -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-circle-info mr-2 text-sky-400"></i>Agent Status</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-slate-400">Status</span><span id="as_status" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Mode</span><span id="as_mode" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Last tick</span><span id="as_last_tick" class="font-mono text-xs">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Plans 24h</span><span id="as_plans_24h" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Actions 24h</span><span id="as_actions_24h" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Errors 24h</span><span id="as_errors_24h" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Circuit</span><span id="as_circuit" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Agreement rate</span><span id="as_agreement_rate" class="font-mono">—</span></div>
+          </div>
+        </div>
+
+        <!-- Survival Metrics -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-skull mr-2 text-amber-400"></i>Survival Metrics</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-slate-400">Agent age</span><span id="sm_age" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Initial capital</span><span id="sm_initial" class="font-mono text-emerald-400">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Current capital</span><span id="sm_current" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Peak capital</span><span id="sm_peak" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Change</span><span id="sm_change" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Max drawdown</span><span id="sm_max_dd" class="font-mono text-rose-400">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Survival mode</span><span id="sm_mode" class="font-mono font-bold">—</span></div>
+          </div>
+        </div>
+
+        <!-- Treasury -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-coins mr-2 text-emerald-400"></i>Treasury</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-slate-400">Balance</span><span id="tr_balance" class="font-mono text-lg">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Runway</span><span id="tr_runway" class="font-mono">—</span></div>
+            <div class="mt-3 pt-3 border-t border-slate-800">
+              <div class="text-xs text-slate-500 mb-1">Treasury history (last 10)</div>
+              <div id="tr_history" class="space-y-1">
+                <div class="text-xs text-slate-600">No data</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-heart-pulse mr-2 text-rose-400"></i>Health</h2>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-slate-400">Overall</span><span id="hl_status" class="font-mono font-bold">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Survival</span><span id="hl_survival" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Agreement 24h</span><span id="hl_agreement" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Runway</span><span id="hl_runway" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Errors 24h</span><span id="hl_errors" class="font-mono">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Last tick</span><span id="hl_last_tick" class="font-mono text-xs">—</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 2: Timeline + Reasoning -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
+        <!-- Timeline -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-300"><i class="fa-solid fa-clock-rotate-left mr-2 text-cyan-400"></i>Activity Timeline</h2>
+            <span id="tl_count" class="text-xs text-slate-500">0 entries</span>
+          </div>
+          <div id="tl_entries" class="space-y-1 max-h-[32rem] overflow-y-auto pr-1 text-sm">
+            <div class="text-xs text-slate-600 py-4 text-center">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Reasoning / Plan Detail -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-300"><i class="fa-solid fa-lightbulb mr-2 text-amber-400"></i>Latest Reasoning</h2>
+            <span id="rs_plan_id" class="text-xs text-slate-500">Plan #—</span>
+          </div>
+          <div id="rs_content" class="space-y-3 text-sm max-h-[32rem] overflow-y-auto pr-1">
+            <div class="text-xs text-slate-600 py-4 text-center">No plan data</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 3: Shadow Observations + Mode History -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
+        <!-- Shadow Observations -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-300"><i class="fa-solid fa-eye mr-2 text-fuchsia-400"></i>Shadow Observations</h2>
+            <span id="so_count" class="text-xs text-slate-500">0 total</span>
+          </div>
+          <div id="so_table_wrap" class="overflow-x-auto max-h-[24rem] overflow-y-auto">
+            <table class="min-w-full text-xs">
+              <thead class="text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th class="text-left py-1 pr-2">Time</th>
+                  <th class="text-left py-1 px-2">Action</th>
+                  <th class="text-center py-1 px-2">Agreement</th>
+                  <th class="text-left py-1 pl-2">System</th>
+                </tr>
+              </thead>
+              <tbody id="so_tbody" class="font-mono text-slate-200"></tbody>
+            </table>
+          </div>
+          <div id="so_metrics" class="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 grid grid-cols-3 gap-2"></div>
+        </div>
+
+        <!-- Mode History -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-arrow-right-arrow-left mr-2 text-amber-400"></i>Survival Mode History</h2>
+          <div id="mh_entries" class="space-y-1 max-h-[24rem] overflow-y-auto pr-1 text-sm">
+            <div class="text-xs text-slate-600 py-4 text-center">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 4: Analyst Reports + Consensus -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
+        <!-- Analyst Reports -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-chart-bar mr-2 text-indigo-400"></i>Analyst Reports</h2>
+          <div id="ar_entries" class="space-y-2 max-h-[24rem] overflow-y-auto pr-1 text-sm">
+            <div class="text-xs text-slate-600 py-4 text-center">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Consensus & Conflict -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-scale-balanced mr-2 text-amber-400"></i>Consensus & Conflict</h2>
+          <div id="cc_content" class="space-y-3 text-sm">
+            <div class="text-xs text-slate-600 py-4 text-center">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-500 py-2 text-center">
+        All data from agent SQLite storage (read-only). Data refreshes every 10 seconds.
+      </footer>
+    </div>
+
+    <script>
+      const fmtUsd = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        return Number(x).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+      const fmtPct = (x) => {
+        if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+        return Number(x).toFixed(1) + "%";
+      };
+      const fmtTime = (ts) => {
+        if (!ts) return "—";
+        try { return new Date(ts).toLocaleTimeString(); } catch { return ts ? ts.slice(11, 19) : "—"; }
+      };
+      const fmtDate = (ts) => {
+        if (!ts) return "—";
+        try { return new Date(ts).toLocaleString(); } catch { return ts || "—"; }
+      };
+      const modeBadge = (mode) => {
+        const colors = {
+          NORMAL: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+          CONSERVATIVE: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+          DEFENSIVE: "bg-orange-500/15 text-orange-300 border-orange-500/30",
+          HIBERNATE: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+        };
+        const cls = colors[mode] || "bg-slate-500/15 text-slate-300 border-slate-500/30";
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${cls}">${mode}</span>`;
+      };
+      const agreementBadge = (a) => {
+        const m = {
+          AGREE: "bg-emerald-500/15 text-emerald-300",
+          DISAGREE: "bg-rose-500/15 text-rose-300",
+          PARTIAL: "bg-amber-500/15 text-amber-300",
+          NOT_APPLICABLE: "bg-slate-500/15 text-slate-400",
+          UNKNOWN: "bg-slate-500/15 text-slate-400",
+        };
+        const cls = m[a] || "bg-slate-500/15 text-slate-400";
+        return `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${cls}">${a}</span>`;
+      };
+      const healthBadge = (s) => {
+        const m = {
+          HEALTHY: "pulse-green bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+          DEGRADED: "pulse-amber bg-amber-500/10 text-amber-300 border-amber-500/30",
+          CRITICAL: "pulse-red bg-rose-500/10 text-rose-300 border-rose-500/30",
+        };
+        const cls = m[s] || "bg-slate-500/10 text-slate-300 border-slate-500/30";
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}">${s}</span>`;
+      };
+      const statusDot = (ok) => ok
+        ? '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400 pulse-green mr-1"></span>'
+        : '<span class="inline-block w-2 h-2 rounded-full bg-slate-500 mr-1"></span>';
+
+      // ---- Banner for agent state ----
+      function updateBanner(health, stale) {
+        let el = document.getElementById("agent_banner");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "agent_banner";
+          el.className = "text-sm font-semibold px-4 py-2 rounded-lg text-center border";
+          document.querySelector("header").after(el);
+        }
+        if (stale) {
+          el.className = "text-sm font-semibold px-4 py-2 rounded-lg text-center border bg-amber-500/10 text-amber-300 border-amber-500/30";
+          el.innerHTML = '⚠ Using Historical Data — Last activity over 24h ago';
+        } else if (health === "HEALTHY") {
+          el.className = "text-sm font-semibold px-4 py-2 rounded-lg text-center border bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+          el.innerHTML = '🟢 Agent Active';
+        } else if (health === "OFFLINE") {
+          el.className = "text-sm font-semibold px-4 py-2 rounded-lg text-center border bg-rose-500/10 text-rose-300 border-rose-500/30";
+          el.innerHTML = '🔴 Agent Offline';
+        } else {
+          el.className = "text-sm font-semibold px-4 py-2 rounded-lg text-center border bg-amber-500/10 text-amber-300 border-amber-500/30";
+          el.innerHTML = '🟡 Agent Degraded';
+        }
+      }
+
+      // ---- Load functions ----
+      async function loadStatus() {
+        try {
+          const r = await fetch("/api/agent/status");
+          const d = await r.json();
+          const el = document.getElementById("status_badge");
+          if (d.running) {
+            el.innerHTML = statusDot(true) + "RUNNING · " + (d.agent_mode || "observe").toUpperCase();
+            el.className = "text-xs font-semibold px-3 py-1.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+          } else {
+            el.innerHTML = statusDot(false) + "STOPPED";
+            el.className = "text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-500/10 text-slate-400 border-slate-500/30";
+          }
+        } catch {}
+      }
+
+      async function loadHealth() {
+        try {
+          const r = await fetch("/api/agent/health");
+          const d = await r.json();
+          document.getElementById("hl_status").innerHTML = healthBadge(d.status);
+          document.getElementById("hl_survival").innerHTML = modeBadge(d.survival_mode);
+          document.getElementById("hl_agreement").textContent = d.agreement_rate_24h !== null ? fmtPct(d.agreement_rate_24h * 100) : "—";
+          document.getElementById("hl_runway").textContent = d.runway_days !== null ? d.runway_days.toFixed(1) + "d" : "—";
+          document.getElementById("hl_errors").textContent = String(d.error_count_24h ?? "—");
+          document.getElementById("hl_last_tick").textContent = fmtDate(d.last_tick_ts);
+          // Also update Agent Status card from health data
+          document.getElementById("as_status").innerHTML = healthBadge(d.status);
+          document.getElementById("as_mode").textContent = d.survival_mode || "—";
+          document.getElementById("as_last_tick").textContent = d.seconds_since_last_tick !== null
+            ? Math.round(d.seconds_since_last_tick) + "s ago" : "—";
+          document.getElementById("as_plans_24h").textContent = String(d.plans_24h ?? "—");
+          document.getElementById("as_actions_24h").textContent = String(d.actions_24h ?? "—");
+          document.getElementById("as_errors_24h").textContent = String(d.error_count_24h ?? "—");
+          document.getElementById("as_circuit").textContent = d.circuit_breaker_state || "—";
+          document.getElementById("as_agreement_rate").textContent = d.agreement_rate_24h !== null ? fmtPct(d.agreement_rate_24h * 100) : "—";
+        } catch {}
+      }
+
+      async function loadSurvival() {
+        try {
+          const r = await fetch("/api/agent/survival");
+          const d = await r.json();
+          document.getElementById("sm_age").textContent = d.age_days ? d.age_days.toFixed(2) + " days" : "—";
+          document.getElementById("sm_initial").textContent = fmtUsd(d.initial_capital);
+          document.getElementById("sm_current").textContent = fmtUsd(d.current_capital);
+          document.getElementById("sm_peak").textContent = fmtUsd(d.peak_capital);
+          const change = d.capital_change_pct;
+          const changeEl = document.getElementById("sm_change");
+          if (change !== null && change !== undefined) {
+            changeEl.textContent = (change >= 0 ? "+" : "") + change.toFixed(2) + "%";
+            changeEl.className = "font-mono " + (change >= 0 ? "text-emerald-400" : "text-rose-400");
+          }
+          document.getElementById("sm_max_dd").textContent = d.max_drawdown ? "-" + d.max_drawdown.toFixed(1) + "%" : "—";
+          document.getElementById("sm_mode").innerHTML = modeBadge(d.current_survival_mode);
+
+          // Mode history
+          const mhEl = document.getElementById("mh_entries");
+          if (d.mode_history && d.mode_history.length > 0) {
+            mhEl.innerHTML = d.mode_history.map(m =>
+              `<div class="flex justify-between text-xs py-1 border-b border-slate-800/50">` +
+                `<span class="text-slate-400">${fmtDate(m.ts)}</span>` +
+                `<span>${modeBadge(m.mode)}</span>` +
+              `</div>`
+            ).join("");
+          } else {
+            mhEl.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No mode changes</div>';
+          }
+        } catch {}
+      }
+
+      async function loadTreasury() {
+        try {
+          const r = await fetch("/api/agent/treasury");
+          const d = await r.json();
+          const cur = d.current || {};
+          document.getElementById("tr_balance").textContent = fmtUsd(cur.treasury_usdt);
+          document.getElementById("tr_runway").textContent = cur.runway_days ? cur.runway_days.toFixed(1) + " days" : "—";
+
+          const histEl = document.getElementById("tr_history");
+          if (d.history && d.history.length > 0) {
+            histEl.innerHTML = d.history.slice(0, 10).map(h =>
+              `<div class="flex justify-between text-xs">` +
+                `<span class="text-slate-400">${fmtDate(h.ts)}</span>` +
+                `<span class="font-mono">${fmtUsd(h.treasury_usdt)} ${modeBadge(h.survival_mode)}</span>` +
+              `</div>`
+            ).join("");
+          } else {
+            histEl.innerHTML = '<div class="text-xs text-slate-600">No history</div>';
+          }
+        } catch {}
+      }
+
+      async function loadTimeline() {
+        try {
+          const r = await fetch("/api/agent/timeline?limit=30");
+          const d = await r.json();
+          const entries = d.entries || [];
+          document.getElementById("tl_count").textContent = entries.length + " entries";
+
+          const el = document.getElementById("tl_entries");
+          if (entries.length === 0) {
+            el.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No activity yet</div>';
+            return;
+          }
+
+          el.innerHTML = entries.map(e => {
+            const ts = fmtTime(e.ts);
+            let icon, text, color;
+            switch (e.type) {
+              case "plan":
+                icon = "fa-solid fa-file-lines text-sky-400";
+                color = "text-sky-300";
+                text = `Plan #${e.plan_id}: ${e.summary || "(no summary)"}`;
+                if (e.action_count) text += ` (${e.action_count} actions)`;
+                break;
+              case "action":
+                icon = e.success ? "fa-solid fa-check-circle text-emerald-400" : "fa-solid fa-times-circle text-rose-400";
+                color = e.success ? "text-emerald-300" : "text-rose-300";
+                text = `${e.action_type} → ${e.detail || (e.success ? "success" : "failed")}`;
+                break;
+              case "shadow":
+                icon = "fa-solid fa-eye text-fuchsia-400";
+                color = "text-fuchsia-300";
+                text = `Shadow: ${agreementBadge(e.agreement)} ${e.recommended_action} — ${e.system_action || ""}`;
+                break;
+              case "consensus":
+                icon = "fa-solid fa-scale-balanced text-amber-400";
+                color = "text-amber-300";
+                const pct = e.agreement_pct !== undefined ? ` (${e.agreement_pct}% agreement)` : "";
+                text = `Consensus: ${modeBadge(e.consensus)}${pct}`;
+                break;
+              case "debate":
+                icon = "fa-solid fa-handshake text-cyan-400";
+                color = "text-cyan-300";
+                text = e.summary || "Bull vs Bear debate";
+                break;
+              default:
+                icon = "fa-solid fa-circle text-slate-400";
+                color = "text-slate-300";
+                text = JSON.stringify(e);
+            }
+            return `<div class="flex items-start gap-2 py-1 border-b border-slate-800/30 text-xs">` +
+              `<span class="text-slate-500 whitespace-nowrap w-16 flex-shrink-0">${ts}</span>` +
+              `<i class="${icon} mt-0.5"></i>` +
+              `<span class="${color}">${text}</span>` +
+            `</div>`;
+          }).join("");
+        } catch {}
+      }
+
+      async function loadReasoning() {
+        try {
+          const r = await fetch("/api/agent/reasoning");
+          const d = await r.json();
+          document.getElementById("rs_plan_id").textContent = "Plan #" + (d.plan_id || "—");
+
+          const el = document.getElementById("rs_content");
+          if (d.error || !d.summary) {
+            el.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">' + (d.error || "No plan data") + '</div>';
+            return;
+          }
+
+          let html = "";
+          // Summary
+          html += `<div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+            <div class="text-xs text-slate-400 mb-1">Summary</div>
+            <div class="text-sm">${d.summary}</div>
+          </div>`;
+
+          // Observations
+          if (d.observations && d.observations.length) {
+            html += `<div>
+              <div class="text-xs text-slate-400 mb-1">Observations</div>
+              <ul class="space-y-0.5">`;
+            d.observations.forEach(o => { html += `<li class="text-xs text-slate-300">• ${o}</li>`; });
+            html += `</ul></div>`;
+          }
+
+          // Risks
+          if (d.risks && d.risks.length) {
+            html += `<div>
+              <div class="text-xs text-slate-400 mb-1">Risks</div>
+              <ul class="space-y-0.5">`;
+            d.risks.forEach(r => { html += `<li class="text-xs text-rose-300">⚠ ${r}</li>`; });
+            html += `</ul></div>`;
+          }
+
+          // Proposed actions
+          if (d.proposed_actions && d.proposed_actions.length) {
+            html += `<div>
+              <div class="text-xs text-slate-400 mb-1">Proposed Actions</div>`;
+            d.proposed_actions.forEach(a => {
+              html += `<div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 mb-1">
+                <div class="font-semibold text-xs text-sky-300">${a.type}</div>
+                <div class="text-xs text-slate-400">${a.why || ""}</div>
+                ${a.params && Object.keys(a.params).length ? `<div class="text-xs text-slate-500 mt-1">${JSON.stringify(a.params)}</div>` : ""}
+              </div>`;
+            });
+            html += `</div>`;
+          }
+
+          // Snapshot summary
+          if (d.input_snapshot_summary) {
+            const s = d.input_snapshot_summary;
+            html += `<div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="text-xs text-slate-400 mb-1">Snapshot at decision time</div>
+              <div class="grid grid-cols-2 gap-1 text-xs">
+                <span>Equity: <span class="font-mono">${fmtUsd(s.equity)}</span></span>
+                <span>Drawdown: <span class="font-mono">${s.drawdown_pct !== null ? s.drawdown_pct.toFixed(1) + "%" : "—"}</span></span>
+                <span>Open positions: <span class="font-mono">${s.open_positions ?? "—"}</span></span>
+                <span>Exposure: <span class="font-mono">${s.exposure_x !== null ? s.exposure_x.toFixed(2) + "x" : "—"}</span></span>
+                <span>Treasury: <span class="font-mono">${fmtUsd(s.treasury_usdt)}</span></span>
+              </div>
+            </div>`;
+          }
+
+          // Confidence + emergency
+          html += `<div class="flex gap-4 text-xs text-slate-500">
+            <span>Confidence: <span class="font-mono">${d.confidence !== null ? (d.confidence * 100).toFixed(0) + "%" : "—"}</span></span>
+            <span>Emergency: <span class="font-mono">${d.emergency ? "⚠ YES" : "no"}</span></span>
+          </div>`;
+
+          el.innerHTML = html;
+        } catch {}
+      }
+
+      async function loadShadow() {
+        try {
+          const r = await fetch("/api/agent/shadow?limit=15");
+          const d = await r.json();
+          const obs = d.observations || [];
+          document.getElementById("so_count").textContent = obs.length + " total";
+
+          const tbody = document.getElementById("so_tbody");
+          if (obs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-slate-600 py-4 text-xs">No observations</td></tr>';
+            document.getElementById("so_metrics").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = obs.map(o =>
+            `<tr class="border-b border-slate-800/30">
+              <td class="py-1 pr-2 whitespace-nowrap text-slate-400">${fmtTime(o.ts)}</td>
+              <td class="py-1 px-2 whitespace-nowrap">${o.recommended_action || "—"}</td>
+              <td class="py-1 px-2 text-center">${agreementBadge(o.agreement)}</td>
+              <td class="py-1 pl-2 whitespace-nowrap text-xs text-slate-400">${(o.system_action || "").slice(0, 40)}</td>
+            </tr>`
+          ).join("");
+
+          const m = d.metrics || {};
+          const metricsEl = document.getElementById("so_metrics");
+          metricsEl.innerHTML =
+            `<div>Agreement: <span class="font-mono text-slate-200">${m.agreement_rate !== null ? fmtPct(m.agreement_rate * 100) : "—"}</span></div>` +
+            `<div>Avg Δ: <span class="font-mono text-slate-200">${m.avg_equity_change !== null ? fmtUsd(m.avg_equity_change) : "—"}</span></div>` +
+            `<div>Pending: <span class="font-mono text-amber-300">${m.pending_count ?? 0}</span></div>`;
+        } catch {}
+      }
+
+      async function loadAnalysts() {
+        try {
+          const r = await fetch("/api/agent/analysts?limit=5");
+          const d = await r.json();
+          const rows = d.reports || [];
+          const el = document.getElementById("ar_entries");
+          if (rows.length === 0) {
+            el.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No analyst reports yet</div>';
+            return;
+          }
+          el.innerHTML = rows.map(ar => {
+            const reportsList = (ar.reports || []).map(rep =>
+              `<div class="flex items-center justify-between py-1 text-xs border-b border-slate-800/30">
+                <span class="text-slate-300">${rep.agent}</span>
+                <span>${modeBadge(rep.verdict)}</span>
+                <span class="text-slate-400">${rep.confidence !== null ? (rep.confidence * 100).toFixed(0) + '%' : '—'}</span>
+              </div>`
+            ).join("");
+            return `<div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2">
+              <div class="text-xs text-slate-400 mb-1">Plan #${ar.plan_id} · ${fmtDate(ar.ts)} · Consensus: ${modeBadge(ar.consensus)}</div>
+              ${reportsList}
+            </div>`;
+          }).join("");
+        } catch {}
+      }
+
+      async function loadConsensus() {
+        try {
+          const r = await fetch("/api/agent/analyst-consensus");
+          const d = await r.json();
+          const el = document.getElementById("cc_content");
+          if (d.analyst_count === 0) {
+            el.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No consensus data</div>';
+            return;
+          }
+          const ag = (d.agreement_score * 100).toFixed(0);
+          const co = (d.conflict_score * 100).toFixed(0);
+          const analystsList = (d.analysts || []).map(a =>
+            `<div class="flex justify-between text-xs py-1 border-b border-slate-800/30">
+              <span class="text-slate-300">${a.agent}</span>
+              <span>${modeBadge(a.verdict)}</span>
+              <span class="text-slate-400">${a.confidence !== null ? (a.confidence * 100).toFixed(0) + '%' : '—'}</span>
+            </div>`
+          ).join("");
+          el.innerHTML = `
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-400">Consensus</span>
+                <span>${modeBadge(d.consensus)}</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3 text-center">
+                <div class="text-xs text-slate-400">Agreement</div>
+                <div class="text-lg font-mono text-emerald-400">${ag}%</div>
+              </div>
+              <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3 text-center">
+                <div class="text-xs text-slate-400">Conflict</div>
+                <div class="text-lg font-mono text-rose-400">${co}%</div>
+              </div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2">
+              <div class="text-xs text-slate-400 mb-1">Analysts (${d.analyst_count})</div>
+              ${analystsList}
+            </div>
+          `;
+        } catch {}
+      }
+
+      // ---- Polling loop ----
+      async function pollAll() {
+        await Promise.allSettled([
+          loadStatus(), loadHealth(), loadSurvival(), loadTreasury(),
+          loadTimeline(), loadReasoning(), loadShadow(),
+          loadAnalysts(), loadConsensus(),
+        ]);
+        // Update banner from health data
+        try {
+          const r = await fetch("/api/agent/health");
+          const d = await r.json();
+          updateBanner(d.status, d.stale_data);
+        } catch {}
+      }
+
+      // Initial load + interval
+      pollAll();
+      setInterval(pollAll, 10000);
+    </script>
+  </body>
+</html>

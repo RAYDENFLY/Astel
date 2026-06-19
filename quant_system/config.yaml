@@ -1,116 +1,66 @@
-# quant_system/config.yaml
-
 system:
-  timeframe: "4H"
-  prediction_horizon_bars: 1  # next 4H bar
-  retrain_frequency: "weekly"
+  timeframe: 4H
+  prediction_horizon_bars: 1
+  retrain_frequency: weekly
   rolling_window_months: 24
-
 assets:
-  # Gate futures contract naming is typically SYMBOL_USDT (underscore). Some listings may differ; if a pair 400s,
-  # verify the exact contract name from Gate and update here.
-  # Core
-  - BTC_USDT
-  - ETH_USDT
-  - SOL_USDT
-  - BNB_USDT
-  # Mid
-  - XRP_USDT
-  - AVAX_USDT
-  - LINK_USDT
-  - DOGE_USDT
-  - ADA_USDT
-  # Volatility
-  - LTC_USDT
-  - AAVE_USDT
-  - SUI_USDT
-
+- BTC_USDT
+- ETH_USDT
+- SOL_USDT
+- BNB_USDT
+- XRP_USDT
+- AVAX_USDT
+- LINK_USDT
+- DOGE_USDT
+- ADA_USDT
+- LTC_USDT
+- AAVE_USDT
+- SUI_USDT
 data:
-  # "csv" for offline/backtests, "gate" to pull candles directly from Gate exchange.
-  source: "gate"
-  csv_dir: "quant_system/data/csv"
-  # CSV expected columns (case-insensitive): timestamp, open, high, low, close, volume
-  # timestamp should be parseable by pandas.to_datetime
-  timezone: "UTC"
+  source: gate
+  csv_dir: quant_system/data/csv
+  timezone: UTC
   gate:
-    # How many candles to request per pair from Gate in one shot.
-    # Gate typically supports up to ~2000; keep it high for training.
     candles_limit: 2000
-    # Small delay between public requests to avoid rate limiting.
     request_sleep_sec: 0.12
-
 features:
   atr_period: 14
   rolling_std_period: 20
   ema_fast: 12
   ema_slow: 48
   volume_zscore_period: 20
-
 strategy:
-  threshold_quantile: 0.80
-
+  threshold_quantile: 0.8
 risk:
   starting_equity: 10000.0
   risk_per_trade: 0.0035
   max_portfolio_risk: 0.03
   atr_multiplier: 2.5
-
 execution:
-  slippage_bps: 2.0       # 2 bps each side
-  fee_rate: 0.0004        # 4 bps each side
+  slippage_bps: 2.0
+  fee_rate: 0.0004
   allow_flip: false
-  # Exit policy:
-  # - false (default): positions are NOT closed on signal flip/neutral; exits happen via TP/SL trigger orders on Gate.
-  # - true: if signal becomes neutral or opposite, bot will market-close the position ("SIGNAL_CLOSE") and may re-enter opposite side.
   close_on_signal_change: false
-  # Max number of different contracts (pairs) allowed to have non-zero open positions concurrently.
-  # Set to 0 to disable this cap.
   max_open_pairs: 5
-  # Leverage bounds applied to RiskManager's implied leverage before sending set_leverage to Gate.
-  # Example: set to 5..50 to avoid tiny leverage and cap extreme leverage.
   leverage_min: 5
   leverage_max: 30
-
-  # Optional: tighten TP/SL ONLY for SHORT entries.
-  # This does not change RiskManager sizing (qty); it only adjusts the trigger prices placed on Gate.
-  # Use carefully: tighter SL means more frequent stop-outs.
   short_tpsl_override: true
-  # SL distance multiplier (relative to RiskManager stop_distance): < 1.0 = tighter
   short_sl_mult: 0.6
-  # TP distance multiplier (relative to 1R=stop_distance): < 1.0 = closer TP
   short_tp_mult: 0.6
-
-  # Gate trigger rule used for TP/SL plan orders.
-  # 1 = last price (default). Some users prefer mark price; set accordingly if supported by your account/contract.
-  # Note: Gate may interpret rule values differently; verify in Gate UI after placing a trigger.
   trigger_rule: 1
-
-# Dashboard display helpers (optional)
 display:
-  usdt_to_idr: 16000  # set your preferred rate; dashboard uses this for Rp conversion
-  # Optional: shown in Account Summary card and returned by GET /api/account
-  starting_capital_usdt: 1375.00
-
-# execution_mode: "mock" | "gate"
-execution_mode: "gate"
-
+  usdt_to_idr: 16000
+  starting_capital_usdt: 1375.0
+execution_mode: gate
 gate:
-  # Credentials MUST come from environment variables:
-  #   - GATE_API_KEY
-  #   - GATE_API_SECRET
-  # (Do not store secrets in this file.)
-  api_key: ""
-  api_secret: ""
-  # Futures live base URL (USDT-margined)
-  base_url: "https://api-testnet.gateapi.io/api/v4"
-
+  api_key: ''
+  api_secret: ''
+  base_url: https://api-testnet.gateapi.io/api/v4
 model:
-  model_type: "lightgbm_regressor"
-  # For production you typically want far more data; this is kept low so you can bootstrap
-  # a model from small local CSV samples.
+  model_type: lightgbm_regressor
   min_train_rows: 18
   categorical_features:
-    - asset
+  - asset
   params:
     n_estimators: 600
     learning_rate: 0.03
@@ -119,14 +69,11 @@ model:
     colsample_bytree: 0.9
     reg_lambda: 1.0
     random_state: 42
-
 paths:
-  db_path: "quant_system/database/quant_system.sqlite"
-  schema_path: "quant_system/database/schema.sql"
-  models_dir: "quant_system/models"
-  reports_dir: "quant_system/reports"
-
+  db_path: quant_system/database/quant_system.sqlite
+  schema_path: quant_system/database/schema.sql
+  models_dir: quant_system/models
+  reports_dir: quant_system/reports
 logging:
-  level: "INFO"
-  # If true, console logs are emitted as one-line JSON objects (cleaner + easier to search).
+  level: INFO
   json: true

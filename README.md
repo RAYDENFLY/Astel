@@ -198,6 +198,8 @@ cd "d:\Data Ray\QuantumTrade"
 python scripts\train_from_gate.py
 ```
 
+python -m agent.agent
+
 ## Data caching
 
 Exchange OHLCV is cached (upsert/dedup) to:

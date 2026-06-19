@@ -27,11 +27,15 @@ from typing import Any, Dict, Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agent.actions import execute_action
+from agent.analysts import AnalystTeam
 from agent.guardrails import CircuitBreaker, GuardrailsChecker, RateLimiter
 from agent.llm_client import LLMRouter
 from agent.policy import PolicyConfig, determine_survival_mode, filter_plan, generate_rule_based_plan, is_emergency
 from agent.schema import AgentMode, AgentPlan, AgentSnapshot, SurvivalMode, TokenUsage
+from agent.researcher import ResearchTeam
+from agent.shadow import ShadowComparator
 from agent.snapshot import fetch_snapshot
+from agent.memory import EpisodeResolver
 from agent.storage import AgentStorage, make_storage
 
 log = logging.getLogger("agent")
@@ -65,7 +69,7 @@ def _load_agent_config() -> Dict[str, Any]:
     return {
         "dashboard_base_url":     os.environ.get("DASHBOARD_BASE_URL", "http://localhost:8000"),
         "db_path":                (base_cfg.get("paths") or {}).get("db_path", "quant_system/database/quant_system.sqlite"),
-        "agent_mode":             os.environ.get("AGENT_MODE", "execute"),
+        "agent_mode":             os.environ.get("AGENT_MODE", "observe"),
         "ollama_base_url":        os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
         "ollama_primary_model":   os.environ.get("OLLAMA_PRIMARY_MODEL", "qwen2.5:7b"),
         "ollama_fallback_model":  os.environ.get("OLLAMA_FALLBACK_MODEL", "llama3.2:3b"),
@@ -220,6 +224,24 @@ class AutonomousAgent:
             max_drawdown_pct = cfg["dd_emergency_pct"],
         )
 
+        # Shadow comparator (Phase 2 — read-only observation)
+        self._shadow = ShadowComparator(
+            storage             = self._storage,
+            dashboard_base_url  = cfg["dashboard_base_url"],
+            runner_flags_path   = "agent/.runner_flags.yaml",
+            config_path         = "quant_system/config.yaml",
+            observation_window_sec = 30,  # 30s window for shadow comparison
+        )
+
+        # Analyst team (Phase 4 — multi-analyst reports)
+        self._analysts = AnalystTeam()
+
+        # Research team (Phase 5 — Bull/Bear researchers)
+        self._research = ResearchTeam()
+
+        # Episode resolver (Phase 7B — outcome resolution)
+        self._episode_resolver = EpisodeResolver(storage=self._storage)
+
         # State
         self._survival_mode   = SurvivalMode.NORMAL
         self._last_llm_ts: float = 0.0
@@ -277,6 +299,14 @@ class AutonomousAgent:
             survival_mode      = self._survival_mode,
             agent_mode         = self._mode,
             llm_cost_today_usd = self._treasury._llm_cost_today,
+        )
+
+        # 3b. Run analyst team (Phase 4)
+        analyst_reports = self._analysts.analyze(snapshot)
+        summary = self._analysts.summarize(analyst_reports)
+        log.info(
+            "Analyst team: consensus=%s confidence=%.2f",
+            summary["consensus"], summary["confidence"],
         )
 
         # 4. Determine survival mode (deterministik)
@@ -365,8 +395,185 @@ class AutonomousAgent:
                 log.info("Action %s result: success=%s detail=%s",
                          action.type, success, result.get("detail", ""))
 
+                # ── Episode recording (Phase 7A — Episodic Memory) ──
+                try:
+                    import json as _json_ep
+                    # Snapshot for the episode (dict-safe serialization)
+                    snap_dict = snapshot.model_dump(mode="json") if hasattr(snapshot, 'model_dump') else {}
+                    episode_id = self._storage.save_episode(
+                        ts                = now,
+                        plan_id           = plan_id,
+                        action_type       = action.type.value,
+                        survival_mode     = self._survival_mode.value,
+                        treasury_usdt     = self._treasury.treasury,
+                        survival_score    = 0.0,  # will be filled from experiment tracking on next tick
+                        analyst_consensus = summary.get("consensus", "unknown"),
+                        debate_verdict    = "unknown",  # debate runs after actions; updated on next tick
+                        snapshot_json     = _json_ep.dumps(snap_dict),
+                        outcome_json      = _json_ep.dumps({"success": success, "result": result, "guardrail_blocked": not allowed}),
+                        importance_score  = 0.5,
+                    )
+                    log.debug("Episode recorded: id=%d action=%s", episode_id, action.type.value)
+                except Exception:
+                    log.exception("Episode recording failed (non-fatal)")
+
+            # ── Shadow observation (Phase 2) ──
+            # Compare agent recommendation vs actual system behavior
+            # Non-blocking: runs in background thread / on next tick
+            if plan_id is not None:
+                try:
+                    self._shadow.observe(filtered_plan, plan_id)
+                except Exception:
+                    log.exception("Shadow observe failed (non-fatal)")
+
+        # ── Analyst reports (Phase 4) ──
+        if plan_id is not None:
+            try:
+                import json as _json_ar
+                reports_dicts = [r.to_dict() for r in analyst_reports]
+                self._storage.save_analyst_reports(
+                    plan_id=plan_id,
+                    ts=now,
+                    reports_json=_json_ar.dumps(reports_dicts),
+                    consensus=summary["consensus"],
+                    confidence=summary["confidence"],
+                    breakdown_json=_json_ar.dumps(summary["breakdown"]),
+                )
+                log.info(
+                    "Analyst reports saved: plan=%d consensus=%s confidence=%.2f",
+                    plan_id, summary["consensus"], summary["confidence"],
+                )
+            except Exception:
+                log.exception("Analyst save failed (non-fatal)")
+
+        # ── Bull/Bear research (Phase 5) ──
+        if plan_id is not None:
+            try:
+                import json as _json_bb
+                bull, bear, verdict = self._research.run(snapshot, analyst_consensus=summary.get("consensus"))
+                debate_id = self._storage.save_bullbear_debate(
+                    plan_id=plan_id,
+                    ts=now,
+                    bull_json=_json_bb.dumps(bull),
+                    bear_json=_json_bb.dumps(bear),
+                    verdict_json=_json_bb.dumps(verdict),
+                    bull_confidence=bull.get("overall_confidence", 0.5),
+                    bear_confidence=bear.get("overall_confidence", 0.5),
+                    net_bias=verdict.get("net_bias", "neutral"),
+                    final_verdict=verdict.get("final_verdict", "neutral"),
+                    final_conviction=verdict.get("final_conviction", 0.5),
+                    override_flag=verdict.get("override_by_analysts", False),
+                )
+                log.info(
+                    "Bull/Bear debate saved: id=%d bull=%s(%.2f) bear=%s(%.2f) final=%s",
+                    debate_id,
+                    bull.get("overall_verdict"), bull.get("overall_confidence"),
+                    bear.get("overall_verdict"), bear.get("overall_confidence"),
+                    verdict.get("final_verdict"),
+                )
+            except Exception:
+                log.exception("Bull/Bear research failed (non-fatal)")
+
+        # ── Experiment tracking (Phase 6) ──
+        try:
+            exp = self._storage.get_active_experiment()
+            if exp is None:
+                exp_id = self._storage.save_experiment_run(
+                    started_at=now,
+                    initial_capital=self.cfg["initial_treasury_usdt"],
+                )
+                # Re-fetch experiment so we use the DB-written values (initial_capital etc.)
+                exp = self._storage.get_active_experiment()
+            else:
+                exp_id = exp["id"]
+
+            current = self._treasury.treasury
+
+            # peak_capital: never lower than initial_capital
+            db_peak = float(exp.get("peak_capital", current)) if exp else current
+            db_initial = float(exp.get("initial_capital", current)) if exp else current
+            if db_peak < db_initial:
+                log.warning(
+                    "peak_capital (%.2f) < initial_capital (%.2f) — repairing",
+                    db_peak, db_initial,
+                )
+                db_peak = db_initial
+            peak = max(db_peak, current)
+            drawdown = 0.0
+            if peak > 0:
+                drawdown = round((peak - current) / peak * 100.0, 2)
+            days_alive = 0.0
+            if exp:
+                import datetime as _dt
+                started = exp.get("started_at", now.isoformat())
+                started_ts = _dt.datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+                days_alive = max(0.0, (now - started_ts).total_seconds() / 86400)
+            # Count stats
+            plans_c = len(self._storage.get_recent_plans(limit=500))
+            debates_c = len(self._storage.get_recent_bullbear_debates(limit=500))
+            analysts_c = len(self._storage.get_recent_analyst_reports(limit=500))
+            shadows_c = len(self._storage.get_shadow_observations(limit=500))
+            # Agreement rate from shadow observations
+            shadows_all = self._storage.get_shadow_observations(limit=500)
+            agrees = sum(1 for s in shadows_all if s.get("agreement") == "AGREE")
+            disagree = sum(1 for s in shadows_all if s.get("agreement") == "DISAGREE")
+            agree_rate = round(agrees / max(1, agrees + disagree), 2)
+            # Survival score
+            cap_growth = ((current - exp.get("initial_capital", current)) / max(0.01, exp.get("initial_capital", current))) * 100 if exp else 0
+            cap_score = min(100, max(0, 50 + cap_growth))
+            dd_score = min(100, max(0, 100 - abs(drawdown) * 5))
+            long_score = min(100, days_alive * 2)
+            agree_score = agree_rate * 100
+            runway_val = self._treasury.runway_days
+            runway_score = min(100, runway_val * 5)
+            surv_score = round(cap_score * 0.30 + dd_score * 0.25 + long_score * 0.20 + agree_score * 0.15 + runway_score * 0.10, 1)
+            total_return = round(((current - exp.get("initial_capital", current)) / max(0.01, exp.get("initial_capital", current))) * 100, 2) if exp else 0
+            prev_best = exp.get("best_survival_score", 0) if exp else 0
+            prev_worst = exp.get("worst_survival_score", 100) if exp else 100
+            prev_high_runway = exp.get("highest_runway_days", 0) if exp else 0
+            prev_low_runway = exp.get("lowest_runway_days", 9999) if exp else 9999
+            self._storage.update_experiment_run(
+                experiment_id=exp_id,
+                current_capital=round(current, 2),
+                peak_capital=round(peak, 2),
+                max_drawdown=round(drawdown, 2),
+                days_alive=round(days_alive, 2),
+                survival_score=surv_score,
+                plans_generated=plans_c,
+                debates_generated=debates_c,
+                analyst_reports_generated=analysts_c,
+                shadow_observations=shadows_c,
+                agreement_rate=agree_rate,
+                total_return_pct=total_return,
+                highest_runway_days=max(prev_high_runway, runway_val),
+                lowest_runway_days=min(prev_low_runway, runway_val if runway_val < 9999 else 0),
+                best_survival_score=max(prev_best, surv_score),
+                worst_survival_score=min(prev_worst, surv_score),
+                runway_days=round(runway_val, 1),
+            )
+        except Exception:
+            log.exception("Experiment tracking failed (non-fatal)")
+
         # 8. Save treasury state
         self._treasury.save(self._survival_mode.value)
+        
+        # ── Shadow resolution (Phase 2) ──
+        # Resolve observations older than 24h with objective measurements
+        try:
+            resolved = self._shadow.resolve_pending()
+            if resolved > 0:
+                log.info("Shadow resolved %d pending observations", resolved)
+        except Exception:
+            log.exception("Shadow resolve failed (non-fatal)")
+
+        # ── Episode resolution (Phase 7B — Outcome Evaluation) ──
+        # Resolve episodes older than 6h with current experiment metrics
+        try:
+            ep_resolved = self._episode_resolver.resolve_pending_episodes()
+            if ep_resolved > 0:
+                log.info("EpisodeResolver: resolved %d episodes", ep_resolved)
+        except Exception:
+            log.exception("Episode resolution failed (non-fatal)")
 
         log.info(
             "Agent tick #%d done. mode=%s treasury=$%.2f runway=%.1fd",
@@ -423,6 +630,18 @@ def _setup_logging() -> None:
 
 if __name__ == "__main__":
     _setup_logging()
+
+    # Load .env so AGENT_STORAGE/AGENT_POSTGRES_DSN etc are available
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        try:
+            from quant_system.utils.env import load_dotenv
+            load_dotenv()
+        except Exception:
+            pass
+
     cfg = _load_agent_config()
     agent = AutonomousAgent(cfg)
     agent.run()

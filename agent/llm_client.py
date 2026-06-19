@@ -392,7 +392,7 @@ def _safe_default_plan(snapshot: AgentSnapshot) -> AgentPlan:
         risks=["Unknown state — conservative action chosen."],
         proposed_actions=[
             ProposedAction(
-                type=ActionType.PAUSE_ENTRIES,
+                type="PAUSE_ENTRIES",
                 params={"duration_min": 60},
                 why="LLM fallback safety pause",
                 guardrails=[],

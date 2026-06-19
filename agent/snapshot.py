@@ -43,15 +43,24 @@ def fetch_snapshot(
     available   = float(acct_data.get("available", 0.0) or 0.0)
     unrealized  = float(acct_data.get("unrealized_pnl", 0.0) or 0.0)
 
-    # Drawdown: dari peak equity; dashboard seharusnya expose ini, kalau tidak ada hitung dari equity
-    drawdown_pct = float(acct_data.get("drawdown_pct", 0.0) or 0.0)
-    if drawdown_pct == 0.0:
+    # Drawdown: Dashboard API returns {"drawdown": <fraction in [0,1]>}
+    # Agent schema expects drawdown_pct as NEGATIVE percentage (e.g., -5.2 for -5.2%)
+    raw_dd = float(acct_data.get("drawdown", 0.0) or 0.0)
+    if raw_dd > 0.0:
+        # Convert fraction (0.05) → percentage (-5.0)
+        drawdown_pct = -round(raw_dd * 100.0, 2)
+    else:
+        # Fallback: compute from peak_equity if available
         peak = float(acct_data.get("peak_equity", equity) or equity)
-        if peak > 0:
-            drawdown_pct = ((equity - peak) / peak) * 100.0
+        if peak > 0 and equity < peak:
+            drawdown_pct = -round(((peak - equity) / peak) * 100.0, 2)
+        else:
+            drawdown_pct = 0.0
 
     # ── Positions ─────────────────────────────────────────────────────────────
-    pos_data: List[Dict[str, Any]] = _get_json(f"{dashboard_base_url}/api/open-positions", timeout=timeout) or []
+    raw_pos = _get_json(f"{dashboard_base_url}/api/open-positions", timeout=timeout) or {}
+    # Dashboard returns {"positions": [...]}, NOT a raw list
+    pos_data: List[Dict[str, Any]] = raw_pos.get("positions", []) if isinstance(raw_pos, dict) else (raw_pos or [])
     positions: List[PositionSnapshot] = []
     total_notional = 0.0
     for p in pos_data:
