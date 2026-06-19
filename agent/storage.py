@@ -107,6 +107,13 @@ class AgentStorage(ABC):
     def get_recent_memory_injections(self, limit: int = 20) -> List[Dict[str, Any]]: ...
     @abstractmethod
     def get_memory_injection_stats(self) -> Dict[str, Any]: ...
+    # Memory attribution (Phase 7D.2)
+    @abstractmethod
+    def save_attribution(self, ts: datetime, plan_id: int, episode_id: int, memory_rules_count: int, memory_confidence: float, planner_decision: str, analyst_consensus: str, debate_verdict: str, survival_mode: str, outcome_quality: str, survival_score_delta: float, equity_delta_pct: float, memory_contribution_score: float) -> int: ...
+    @abstractmethod
+    def get_recent_attributions(self, limit: int = 20) -> List[Dict[str, Any]]: ...
+    @abstractmethod
+    def get_attribution_metrics(self) -> Dict[str, Any]: ...
 
 # ===================== PG Schema =====================
 PG_SCHEMA = """
@@ -162,8 +169,26 @@ CREATE TABLE IF NOT EXISTS memory_injections (
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_memory_injections_ts ON memory_injections(ts DESC);
-"""
 
+CREATE TABLE IF NOT EXISTS memory_attributions (
+    id               SERIAL PRIMARY KEY,
+    ts               TIMESTAMPTZ NOT NULL,
+    plan_id          INTEGER REFERENCES agent_plans(id),
+    episode_id       INTEGER REFERENCES agent_episodes(id),
+    memory_rules_count INTEGER NOT NULL DEFAULT 0,
+    memory_confidence   DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    planner_decision    TEXT NOT NULL,
+    analyst_consensus   TEXT NOT NULL DEFAULT 'unknown',
+    debate_verdict      TEXT NOT NULL DEFAULT 'unknown',
+    survival_mode       TEXT NOT NULL DEFAULT 'NORMAL',
+    outcome_quality     TEXT NOT NULL DEFAULT 'unknown',
+    survival_score_delta DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    equity_delta_pct    DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    memory_contribution_score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_memory_attributions_ts ON memory_attributions(ts DESC);
+"""
 # ===================== PostgreSQL =====================
 class PostgresAgentStorage(AgentStorage):
     def __init__(self, dsn: str) -> None:
@@ -428,6 +453,43 @@ class PostgresAgentStorage(AgentStorage):
             return {"injection_count": total, "avg_rules_per_plan": round(avg_rules, 2), "validated_patterns_available": len(self.get_validated_patterns())}
         except Exception:
             return {"injection_count": 0, "avg_rules_per_plan": 0.0, "validated_patterns_available": 0}
+    # ---- Memory Attribution (Phase 7D.2) ----
+    def save_attribution(self, ts, plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score) -> int:
+        with self._get_conn().cursor() as cur:
+            cur.execute(
+                "INSERT INTO memory_attributions (ts, plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (ts, plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score, ts),
+            )
+            return int(cur.fetchone()[0])
+    def get_recent_attributions(self, limit=20) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM memory_attributions ORDER BY ts DESC LIMIT %s", (limit,))
+                rows = cur.fetchall(); cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception:
+            log.exception("get_recent_attributions failed"); return []
+    def get_attribution_metrics(self) -> Dict[str, Any]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT COUNT(*) as total, AVG(memory_contribution_score) as avg_contrib, SUM(CASE WHEN outcome_quality='positive' THEN 1 ELSE 0 END) as pos, SUM(CASE WHEN outcome_quality='negative' THEN 1 ELSE 0 END) as neg, SUM(CASE WHEN outcome_quality='neutral' THEN 1 ELSE 0 END) as neu FROM memory_attributions")
+                row = cur.fetchone()
+                total = int(row[0]) if row else 0
+                avg_contrib = float(row[1]) if row and row[1] is not None else 0.0
+                pos = int(row[2]) if row else 0
+                neg = int(row[3]) if row else 0
+                neu = int(row[4]) if row else 0
+            return {
+                "total_attributions": total,
+                "average_contribution_score": round(avg_contrib, 4),
+                "memory_success_count": pos,
+                "memory_failure_count": neg,
+                "memory_neutral_count": neu,
+                "memory_alignment_rate": round(pos / max(1, total), 4),
+                "memory_success_rate": round(pos / max(1, pos + neg), 4) if (pos + neg) > 0 else 0.0,
+            }
+        except Exception:
+            return {"total_attributions": 0, "average_contribution_score": 0.0, "memory_alignment_rate": 0.0, "memory_success_rate": 0.0, "memory_failure_rate": 0.0}
 
 # ===================== SQLite Schema =====================
 SQLITE_SCHEMA = """
@@ -460,6 +522,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_advice_ts ON memory_advice(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_advice_diff ON memory_advice(difference_detected);
 CREATE TABLE IF NOT EXISTS memory_injections (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, plan_id INTEGER REFERENCES agent_plans(id), rule_count INTEGER NOT NULL DEFAULT 0, rules_json TEXT NOT NULL DEFAULT '[]', planner_used_memory INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_memory_injections_ts ON memory_injections(ts DESC);
+CREATE TABLE IF NOT EXISTS memory_attributions (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, plan_id INTEGER REFERENCES agent_plans(id), episode_id INTEGER REFERENCES agent_episodes(id), memory_rules_count INTEGER NOT NULL DEFAULT 0, memory_confidence REAL NOT NULL DEFAULT 0.0, planner_decision TEXT NOT NULL, analyst_consensus TEXT NOT NULL DEFAULT 'unknown', debate_verdict TEXT NOT NULL DEFAULT 'unknown', survival_mode TEXT NOT NULL DEFAULT 'NORMAL', outcome_quality TEXT NOT NULL DEFAULT 'unknown', survival_score_delta REAL NOT NULL DEFAULT 0.0, equity_delta_pct REAL NOT NULL DEFAULT 0.0, memory_contribution_score REAL NOT NULL DEFAULT 0.0, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_memory_attributions_ts ON memory_attributions(ts DESC);
 """
 
 class SQLiteAgentStorage(AgentStorage):
@@ -683,6 +747,40 @@ class SQLiteAgentStorage(AgentStorage):
             return {"injection_count": total, "avg_rules_per_plan": round(avg_rules, 2), "validated_patterns_available": len(self.get_validated_patterns())}
         except Exception:
             return {"injection_count": 0, "avg_rules_per_plan": 0.0, "validated_patterns_available": 0}
+    # ---- Memory Attribution (Phase 7D.2) ----
+    def save_attribution(self, ts, plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score) -> int:
+        with self._con() as con:
+            return int(con.execute(
+                "INSERT INTO memory_attributions (ts, plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (ts.isoformat(), plan_id, episode_id, memory_rules_count, memory_confidence, planner_decision, analyst_consensus, debate_verdict, survival_mode, outcome_quality, survival_score_delta, equity_delta_pct, memory_contribution_score, ts.isoformat()),
+            ).lastrowid)
+    def get_recent_attributions(self, limit=20) -> List[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                return [dict(r) for r in con.execute("SELECT * FROM memory_attributions ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()]
+        except Exception:
+            log.exception("get_recent_attributions failed"); return []
+    def get_attribution_metrics(self) -> Dict[str, Any]:
+        try:
+            with self._con() as con:
+                row = con.execute("SELECT COUNT(*) as total, AVG(memory_contribution_score) as avg_contrib, SUM(CASE WHEN outcome_quality='positive' THEN 1 ELSE 0 END) as pos, SUM(CASE WHEN outcome_quality='negative' THEN 1 ELSE 0 END) as neg, SUM(CASE WHEN outcome_quality='neutral' THEN 1 ELSE 0 END) as neu FROM memory_attributions").fetchone()
+                total = int(row[0]) if row else 0
+                avg_contrib = float(row[1]) if row and row[1] is not None else 0.0
+                pos = int(row[2]) if row else 0
+                neg = int(row[3]) if row else 0
+                neu = int(row[4]) if row else 0
+            return {
+                "total_attributions": total,
+                "average_contribution_score": round(avg_contrib, 4),
+                "memory_success_count": pos,
+                "memory_failure_count": neg,
+                "memory_neutral_count": neu,
+                "memory_alignment_rate": round(pos / max(1, total), 4),
+                "memory_success_rate": round(pos / max(1, pos + neg), 4) if (pos + neg) > 0 else 0.0,
+            }
+        except Exception:
+            return {"total_attributions": 0, "average_contribution_score": 0.0, "memory_alignment_rate": 0.0, "memory_success_rate": 0.0, "memory_failure_rate": 0.0}
 
 # ===================== Factory =====================
 def make_storage() -> AgentStorage:

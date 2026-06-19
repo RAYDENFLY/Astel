@@ -1523,6 +1523,30 @@ def api_agent_patterns_validated(limit: int = 50) -> Dict[str, Any]:
         return {"validated_patterns": [], "rejected_patterns": [], "metrics": {}, "error": str(e)}
 
 
+@app.get("/api/agent/memory-attribution")
+def api_agent_memory_attribution(limit: int = 20) -> Dict[str, Any]:
+    """Return memory attribution records.
+
+    Query params:
+      limit (int, default=20): number of records
+
+    Response:
+      {
+        "records": [{ts, plan_id, episode_id, outcome_quality, memory_contribution_score, ...}],
+        "metrics": {total_attributions, average_contribution_score, memory_alignment_rate, memory_success_rate}
+      }
+    """
+    try:
+        storage = _get_agent_storage()
+        from agent.memory_attribution import MemoryAttributionEngine
+        engine = MemoryAttributionEngine(storage)
+        result = engine.get_attribution_metrics()
+        result["records"] = result.get("records", [])[:min(limit, 100)]
+        return result
+    except Exception as e:
+        return {"records": [], "metrics": {}, "error": str(e)}
+
+
 @app.get("/api/agent/memory-context")
 def api_agent_memory_context(limit: int = 10) -> Dict[str, Any]:
     """Return procedural memory injection records.
