@@ -36,6 +36,10 @@ from agent.researcher import ResearchTeam
 from agent.shadow import ShadowComparator
 from agent.snapshot import fetch_snapshot
 from agent.memory import EpisodeResolver
+from agent.memory_miner import MemoryMiner
+from agent.memory_sandbox import MemoryAdvisor
+from agent.memory_attribution import MemoryAttributionEngine
+from agent.pattern_validator import PatternValidator
 from agent.storage import AgentStorage, make_storage
 
 log = logging.getLogger("agent")
@@ -242,6 +246,21 @@ class AutonomousAgent:
         # Episode resolver (Phase 7B — outcome resolution)
         self._episode_resolver = EpisodeResolver(storage=self._storage)
 
+        # Phase 7D.2 — Memory Attribution (must be created before EpisodeResolver)
+        self._attribution_engine = MemoryAttributionEngine(storage=self._storage)
+        # Rebuild episode resolver with attribution engine wired in
+        self._episode_resolver = EpisodeResolver(
+            storage=self._storage,
+            attribution_engine=self._attribution_engine,
+        )
+
+        # Phase 7C — Semantic Mining
+        self._memory_miner = MemoryMiner(storage=self._storage)
+        self._pattern_validator = PatternValidator(storage=self._storage)
+
+        # Phase 7D.0 — Memory Sandbox (advisory only)
+        self._memory_advisor = MemoryAdvisor(storage=self._storage)
+
         # State
         self._survival_mode   = SurvivalMode.NORMAL
         self._last_llm_ts: float = 0.0
@@ -414,6 +433,21 @@ class AutonomousAgent:
                         importance_score  = 0.5,
                     )
                     log.debug("Episode recorded: id=%d action=%s", episode_id, action.type.value)
+
+                    # ── Phase 7D.2: Record decision context for attribution ──
+                    try:
+                        self._attribution_engine.record_decision_context(
+                            plan_id=plan_id,
+                            episode_id=episode_id,
+                            memory_injections=[],
+                            planner_decision=action.type.value,
+                            analyst_consensus=summary.get("consensus", "unknown"),
+                            debate_verdict="unknown",
+                            survival_mode=self._survival_mode.value,
+                        )
+                    except Exception:
+                        log.exception("Attribution context recording failed (non-fatal)")
+
                 except Exception:
                     log.exception("Episode recording failed (non-fatal)")
 
@@ -574,6 +608,39 @@ class AutonomousAgent:
                 log.info("EpisodeResolver: resolved %d episodes", ep_resolved)
         except Exception:
             log.exception("Episode resolution failed (non-fatal)")
+
+        # ── Phase 7C: Pattern Mining & Validation (every 50 ticks ≈ 4h) ──
+        try:
+            if self._loop_count % 50 == 0:
+                mined = self._memory_miner.mine_patterns()
+                if mined > 0:
+                    val_result = self._pattern_validator.validate_patterns()
+                    log.info(
+                        "MemoryMiner: mined=%d patterns | PatternValidator: validated=%d rejected=%d",
+                        mined, val_result.get("validated", 0), val_result.get("rejected", 0),
+                    )
+        except Exception:
+            log.exception("Pattern mining/validation failed (non-fatal)")
+
+        # ── Phase 7D.0: Memory Sandbox advice (per plan, advisory only) ──
+        if plan_id is not None:
+            try:
+                planner_rec = "maintain"
+                if rule_plan and rule_plan.proposed_actions:
+                    planner_rec = rule_plan.proposed_actions[0].type.value
+                elif llm_plan and llm_plan.proposed_actions:
+                    planner_rec = llm_plan.proposed_actions[0].type.value
+                self._memory_advisor.advise(
+                    plan_id=plan_id,
+                    planner_decision=planner_rec,
+                    survival_mode=self._survival_mode.value,
+                    analyst_consensus=summary.get("consensus", "unknown"),
+                    debate_verdict=verdict.get("final_verdict", "unknown") if 'verdict' in dir() and isinstance(verdict, dict) else "unknown",
+                    treasury_usdt=self._treasury.treasury,
+                    drawdown_pct=snapshot.account.drawdown_pct if hasattr(snapshot, 'account') else 0.0,
+                )
+            except Exception:
+                log.exception("MemoryAdvisor advice failed (non-fatal)")
 
         log.info(
             "Agent tick #%d done. mode=%s treasury=$%.2f runway=%.1fd",

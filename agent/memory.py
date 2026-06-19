@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+from agent.memory_attribution import MemoryAttributionEngine
 from agent.storage import AgentStorage
 
 log = logging.getLogger("agent.memory")
@@ -38,8 +39,10 @@ class EpisodeResolver:
         self,
         storage: AgentStorage,
         evaluation_window_hours: float = DEFAULT_EVALUATION_WINDOW_HOURS,
+        attribution_engine: Optional[MemoryAttributionEngine] = None,
     ) -> None:
         self._storage = storage
+        self._attribution = attribution_engine
         self._evaluation_window = timedelta(hours=evaluation_window_hours)
 
     def resolve_pending_episodes(self) -> int:
@@ -163,6 +166,18 @@ class EpisodeResolver:
             episode_id=episode_id,
             outcome_json=json.dumps(resolved_outcome),
         )
+
+        # ── Phase 7D.3: Attribute outcome to memory (if attribution engine is available) ──
+        if self._attribution is not None:
+            try:
+                self._attribution.attribute_outcome(
+                    episode_id=episode_id,
+                    outcome_quality=decision_quality,
+                    survival_score_delta=survival_score_delta,
+                    equity_delta_pct=equity_delta_pct,
+                )
+            except Exception:
+                log.exception("Memory attribution failed for episode %d (non-fatal)", episode_id)
 
         log.info(
             "Episode %d resolved: quality=%s surv_delta=%.2f equity_delta=%.2f%% age=%.1fh",

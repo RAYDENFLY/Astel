@@ -33,9 +33,9 @@ strategy:
   threshold_quantile: 0.8
 risk:
   starting_equity: 10000.0
-  risk_per_trade: 0.0035
+  risk_per_trade: 0.002
   max_portfolio_risk: 0.03
-  atr_multiplier: 2.5
+  atr_multiplier: 3.0
 execution:
   slippage_bps: 2.0
   fee_rate: 0.0004
