@@ -405,11 +405,25 @@ class ShadowComparator:
         except Exception:
             log.warning("Shadow resolve: cannot fetch current equity")
 
+        log.info("Shadow resolve: found %d pending observations", len(pending))
+
         for obs in pending:
-            obs_ts_str = obs.get("ts", "")
-            try:
-                obs_ts = datetime.fromisoformat(obs_ts_str)
-            except Exception:
+            # psycopg2 returns TIMESTAMPTZ as datetime objects (PostgreSQL)
+            # sqlite3 returns TEXT as str (SQLite fallback)
+            obs_ts_val = obs.get("ts")
+            if obs_ts_val is None:
+                log.warning("Shadow resolve: obs %d missing ts, skipping", obs.get("id"))
+                continue
+            if isinstance(obs_ts_val, datetime):
+                obs_ts = obs_ts_val
+            elif isinstance(obs_ts_val, str):
+                try:
+                    obs_ts = datetime.fromisoformat(obs_ts_val)
+                except ValueError:
+                    log.warning("Shadow resolve: obs %d unparseable ts='%s', skipping", obs.get("id"), obs_ts_val)
+                    continue
+            else:
+                log.warning("Shadow resolve: obs %d unexpected ts type %s, skipping", obs.get("id"), type(obs_ts_val).__name__)
                 continue
 
             # Check if 24h has elapsed
@@ -435,5 +449,12 @@ class ShadowComparator:
                 "Shadow resolved: obs_id=%d equity_change=%s asset_return=%s",
                 obs["id"], equity_change, asset_return,
             )
+
+        if resolved_count == 0 and pending:
+            log.warning("Shadow resolve: 0/%d resolved — all observations skipped or too young", len(pending))
+        elif resolved_count > 0:
+            log.info("Shadow resolve: resolved %d/%d observations", resolved_count, len(pending))
+        else:
+            log.info("Shadow resolve: 0/%d resolved (none eligible yet)", len(pending))
 
         return resolved_count
