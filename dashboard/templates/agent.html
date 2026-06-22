@@ -173,8 +173,119 @@
         </div>
       </section>
 
+      <!-- Row 5: AI Evolution -->
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 fade-in" style="animation-delay:0.4s">
+        <!-- Memory Influence -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-scale-balanced mr-2 text-fuchsia-400"></i>Memory Influence</h2>
+          <div id="ev_influence" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Pattern Growth -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-chart-line mr-2 text-emerald-400"></i>Pattern Growth</h2>
+          <div id="ev_patterns" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Pair Growth -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-link mr-2 text-cyan-400"></i>Pair Growth</h2>
+          <div id="ev_pairs" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Evolution Scorecard -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-trophy mr-2 text-amber-400"></i>Evolution Scorecard</h2>
+          <div id="ev_scorecard" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 6: Recent Changes + Influence Activity -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in" style="animation-delay:0.5s">
+        <!-- What Changed Recently -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-clock mr-2 text-emerald-400"></i>What Changed Recently</h2>
+          <div id="ev_changes" class="space-y-1 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Influence Activity Timeline -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-chart-bar mr-2 text-cyan-400"></i>Influence Activity</h2>
+          <div id="ev_trends" class="space-y-1 text-xs max-h-[16rem] overflow-y-auto pr-1">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 7: Learning Progress Visualizations (P1) -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in" style="animation-delay:0.6s">
+        <!-- Pattern Evolution -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-chart-simple mr-2 text-emerald-400"></i>Pattern Evolution <span id="ev_pattern_trend" class="text-xs ml-2"></span></h2>
+          <div id="ev_pattern_chart" class="space-y-1 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Memory Growth -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-database mr-2 text-violet-400"></i>Memory Growth</h2>
+          <div id="ev_memory_chart" class="space-y-1 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 8: Pair Resolution + Leaderboard -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in" style="animation-delay:0.7s">
+        <!-- Pair Resolution -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-link mr-2 text-cyan-400"></i>Pair Resolution <span id="ev_pair_trend" class="text-xs ml-2"></span></h2>
+          <div id="ev_pair_chart" class="space-y-1 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Pattern Leaderboard -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-ranking-star mr-2 text-amber-400"></i>Pattern Leaderboard</h2>
+          <div id="ev_leaderboard" class="space-y-1 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 9: AI Lifecycle + Age -->
+      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in" style="animation-delay:0.8s">
+        <!-- AI Lifecycle -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-route mr-2 text-indigo-400"></i>AI Lifecycle</h2>
+          <div id="ev_lifecycle" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+
+        <!-- AI Age + 24h Changes -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-clock mr-2 text-emerald-400"></i>AI Age & Changes</h2>
+          <div id="ev_age" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
+          </div>
+        </div>
+      </section>
+
       <footer class="text-xs text-slate-500 py-2 text-center">
-        All data from agent SQLite storage (read-only). Data refreshes every 10 seconds.
+        All data from agent SQLite/PostgreSQL storage (read-only). Data refreshes every 10 seconds.
       </footer>
     </div>
 
@@ -581,12 +692,226 @@
         } catch {}
       }
 
+      // ---- AI Evolution ----
+      async function loadEvolution() {
+        try {
+          const r = await fetch("/api/agent/evolution");
+          const d = await r.json();
+          if (d.error) throw new Error(d.error);
+
+          // Memory Influence panel
+          const mem = d.memory_influence;
+          document.getElementById("ev_influence").innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-400">Weight</span><span class="font-mono text-fuchsia-400">${mem.influence_weight}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Evaluations</span><span class="font-mono">${mem.total_evaluations}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Agreements</span><span class="font-mono text-emerald-400">${mem.agreements}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Disagreements</span><span class="font-mono text-rose-400">${mem.disagreements}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Overrides</span><span class="font-mono text-amber-400">${mem.overrides}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Blocked</span><span class="font-mono text-slate-400">${mem.blocked_overrides}</span></div>
+          `;
+
+          // Pattern Growth panel
+          const pat = d.patterns;
+          document.getElementById("ev_patterns").innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-400">Validated</span><span class="font-mono text-emerald-400">${pat.validated_patterns}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Active</span><span class="font-mono">${pat.active_patterns}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Avg Confidence</span><span class="font-mono">${pat.avg_confidence.toFixed(2)}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Validation Score</span><span class="font-mono">${pat.avg_validation_score.toFixed(2)}</span></div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-500">
+              ${d.trends.patterns.map(p => `${p.day}: +${p.new} pattern(s)`).join('<br>') || 'No pattern history'}
+            </div>
+          `;
+
+          // Pair Growth panel
+          const sh = d.shadow_growth;
+          document.getElementById("ev_pairs").innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-400">Total Obs</span><span class="font-mono">${sh.total_observations}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Resolved</span><span class="font-mono text-emerald-400">${sh.resolved_observations}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Resolved Pairs</span><span class="font-mono text-cyan-400">${sh.resolved_pairs}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Pair Coverage</span><span class="font-mono">${sh.pair_coverage_pct}%</span></div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-500">
+              ${d.trends.pairs.map(p => `${p.day}: ${p.pairs} pairs`).join('<br>') || 'No pair history'}
+            </div>
+          `;
+
+          // Scorecard
+          const sc = d.scorecard;
+          const evo = d.evolution;
+          document.getElementById("ev_scorecard").innerHTML = `
+            <div class="text-center mb-3">
+              <div class="text-2xl font-bold ${evo.score >= 60 ? 'text-emerald-400' : evo.score >= 40 ? 'text-amber-400' : 'text-slate-400'}">${evo.score}</div>
+              <div class="text-xs text-slate-400">${evo.status}</div>
+            </div>
+            <div class="space-y-1.5">
+              <div><div class="flex justify-between text-xs"><span>Patterns</span><span>${sc.patterns}/5</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 mt-0.5"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${Math.min(100, sc.patterns/5*100)}%"></div></div></div>
+              <div><div class="flex justify-between text-xs"><span>Pairs</span><span>${sc.pairs}</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 mt-0.5"><div class="bg-cyan-500 h-1.5 rounded-full" style="width:${Math.min(100, sc.pairs/500*100)}%"></div></div></div>
+              <div><div class="flex justify-between text-xs"><span>Confidence</span><span>${sc.confidence.toFixed(2)}</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 mt-0.5"><div class="bg-violet-500 h-1.5 rounded-full" style="width:${(sc.confidence * 100).toFixed(0)}%"></div></div></div>
+              <div><div class="flex justify-between text-xs"><span>Contribution</span><span>${sc.contribution.toFixed(2)}</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 mt-0.5"><div class="bg-amber-500 h-1.5 rounded-full" style="width:${(sc.contribution * 100).toFixed(0)}%"></div></div></div>
+              <div><div class="flex justify-between text-xs"><span>Agreement</span><span>${sc.agreement_rate}%</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 mt-0.5"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${sc.agreement_rate}%"></div></div></div>
+            </div>
+          `;
+
+          // What Changed Recently
+          document.getElementById("ev_changes").innerHTML = (d.recent_changes || []).length
+            ? d.recent_changes.map(c => `<div class="flex items-center gap-2 text-xs"><span class="text-emerald-400">+</span>${c}</div>`).join("")
+            : '<div class="text-xs text-slate-500">No recent changes detected</div>';
+            
+          // Trends: simple HTML timeline
+          const inf = d.trends.influence;
+          document.getElementById("ev_trends").innerHTML = inf.length
+            ? inf.map(t => `<div class="flex justify-between text-xs py-0.5 border-b border-slate-800/30">
+                <span class="text-slate-500">${t.day}</span>
+                <span class="text-emerald-400">${t.agrees} agree</span>
+                <span class="text-rose-400">${t.disagrees} disagree</span>
+                <span class="text-amber-400">${t.overrides} override</span>
+              </div>`).join("")
+            : '<div class="text-xs text-slate-500">No influence history yet</div>';
+
+          // ── Pattern Evolution Chart (Row 7) ──
+          const pTrend = d.trends.patterns;
+          const patChart = document.getElementById("ev_pattern_chart");
+          const patTrend = document.getElementById("ev_pattern_trend");
+          if (pTrend.length > 0) {
+            const maxP = Math.max(...pTrend.map(p => p.new), 1);
+            patChart.innerHTML = `<div class="space-y-1 text-xs">
+              <div class="flex justify-between text-slate-400 mb-1"><span>Validated</span><span class="text-emerald-400">${d.patterns.validated_patterns}</span></div>
+              ${pTrend.map(p => {
+                const pct = (p.new / maxP * 100).toFixed(0);
+                return `<div class="flex items-center gap-2"><span class="w-24 text-slate-500">${p.day}</span><div class="flex-1 bg-slate-800 rounded-full h-3"><div class="bg-emerald-500 h-3 rounded-full" style="width:${pct}%"></div></div><span class="w-8 text-right text-slate-400">+${p.new}</span></div>`;
+              }).join('')}
+            </div>`;
+            patTrend.innerHTML = pTrend.length >= 2 && pTrend[0].new < pTrend[1].new ? '↑ Growing' : pTrend.length >= 2 ? '→ Stable' : '';
+          } else { patChart.innerHTML = '<div class="text-xs text-slate-500">No pattern history yet</div>'; }
+
+          // ── Memory Growth Chart (Row 7) ──
+          const eTrend = d.trends.episodes;
+          const memChart = document.getElementById("ev_memory_chart");
+          if (eTrend.length > 0) {
+            const maxEps = Math.max(...eTrend.map(e => e.eps), 1);
+            memChart.innerHTML = `<div class="space-y-1 text-xs">
+              <div class="flex justify-between text-slate-400 mb-1">
+                <span>Total: <span class="font-mono text-slate-200">${d.total_episodes}</span></span>
+                <span>Resolved: <span class="font-mono text-emerald-400">${d.resolved_episodes}</span></span>
+                <span>Patterns: <span class="font-mono text-violet-400">${d.patterns.validated_patterns}</span></span>
+              </div>
+              ${eTrend.map(e => {
+                const pct = (e.eps / maxEps * 100).toFixed(0);
+                const rPct = (e.resolved / maxEps * 100).toFixed(0);
+                return `<div class="flex items-center gap-2"><span class="w-24 text-slate-500">${e.day}</span><div class="flex-1 bg-slate-800 rounded-full h-4 relative">
+                  <div class="bg-violet-500 h-4 rounded-full opacity-50" style="width:${pct}%"></div>
+                  <div class="bg-emerald-500 h-4 rounded-full absolute top-0 left-0" style="width:${rPct}%"></div>
+                </div><span class="w-12 text-right text-slate-400">${e.eps}</span></div>`;
+              }).join('')}
+            </div>`;
+          } else { memChart.innerHTML = '<div class="text-xs text-slate-500">No episode history yet</div>'; }
+
+          // ── Pair Resolution Chart (Row 8) ──
+          const pairChart = document.getElementById("ev_pair_chart");
+          const pairTrend = document.getElementById("ev_pair_trend");
+          const shData = d.shadow_growth;
+          const pairT = d.trends.pairs;
+          if (pairT.length > 0) {
+            const maxP2 = Math.max(...pairT.map(p => p.pairs), 1);
+            pairChart.innerHTML = `<div class="space-y-1 text-xs">
+              <div class="flex justify-between text-slate-400 mb-1">
+                <span>Total Obs: <span class="font-mono">${shData.total_observations}</span></span>
+                <span>Resolved: <span class="font-mono text-emerald-400">${shData.resolved_observations}</span></span>
+                <span>Pairs: <span class="font-mono text-cyan-400">${shData.resolved_pairs}</span></span>
+              </div>
+              <div class="w-full bg-slate-800 rounded-full h-4 mb-2">
+                <div class="bg-cyan-500 h-4 rounded-full flex items-center justify-center text-xs font-bold" style="width:${shData.pair_coverage_pct}%">${shData.pair_coverage_pct}%</div>
+              </div>
+              ${pairT.map(p => {
+                const pct = (p.pairs / maxP2 * 100).toFixed(0);
+                return `<div class="flex items-center gap-2"><span class="w-24 text-slate-500">${p.day}</span><div class="flex-1 bg-slate-800 rounded-full h-3"><div class="bg-cyan-500 h-3 rounded-full" style="width:${pct}%"></div></div><span class="w-12 text-right text-slate-400">${p.pairs}</span></div>`;
+              }).join('')}
+            </div>`;
+            pairTrend.innerHTML = pairT.length >= 2 ? '↑ Growing' : '';
+          } else { pairChart.innerHTML = '<div class="text-xs text-slate-500">No pair history yet</div>'; }
+
+          // ── Pattern Leaderboard (Row 8) ──
+          const lb = document.getElementById("ev_leaderboard");
+          const patterns = d.all_patterns || [];
+          if (patterns.length > 0) {
+            lb.innerHTML = patterns.map((p, i) => {
+              const pct = Math.min(100, p.sample_size / 500 * 100);
+              const active = p.active ? '' : 'opacity-50';
+              return `<div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 ${active}">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-semibold text-amber-400">#${i+1}</span>
+                  <span class="text-xs font-mono text-slate-200">${p.pattern_key}</span>
+                  ${p.validated ? '<span class="text-xs text-emerald-400">✓</span>' : '<span class="text-xs text-slate-500">pending</span>'}
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 mt-1"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${pct}%"></div></div>
+                <div class="flex gap-3 text-xs text-slate-400 mt-1">
+                  <span>${p.sample_size} samples</span>
+                  <span>${(p.success_rate*100).toFixed(0)}% success</span>
+                  <span>conf ${p.confidence_score.toFixed(2)}</span>
+                  <span>val ${p.validation_score.toFixed(2)}</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else { lb.innerHTML = '<div class="text-xs text-slate-500">No patterns mined yet</div>'; }
+
+          // ── AI Lifecycle (Row 9) ──
+          const lc = document.getElementById("ev_lifecycle");
+          const lcData = d.lifecycle;
+          if (lcData && lcData.stages) {
+            lc.innerHTML = `<div class="space-y-1.5 text-xs">
+              <div class="flex justify-between mb-2"><span class="text-slate-400">Overall Progress</span><span class="font-mono">${lcData.progress_pct}%</span></div>
+              <div class="w-full bg-slate-800 rounded-full h-2 mb-2"><div class="bg-indigo-500 h-2 rounded-full" style="width:${lcData.progress_pct}%"></div></div>
+              ${lcData.stages.map(s => {
+                const icon = s.complete ? '✅' : s.stage === lcData.current_stage ? '◉' : '○';
+                const cls = s.complete ? 'text-emerald-400' : s.stage === lcData.current_stage ? 'text-amber-400' : 'text-slate-500';
+                return `<div class="flex items-center gap-2 ${cls}"><span>${icon}</span><span>Stage ${s.stage}: ${s.name}</span><span class="ml-auto">${s.pct}%</span></div>`;
+              }).join('')}
+            </div>`;
+          } else { lc.innerHTML = '<div class="text-xs text-slate-500">Lifecycle data unavailable</div>'; }
+
+          // ── AI Age + 24h Changes (Row 9) ──
+          const age = document.getElementById("ev_age");
+          const c24 = d.changes_24h || {};
+          age.innerHTML = `<div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 text-center">
+              <div class="text-slate-400">AI Age</div>
+              <div class="text-lg font-mono text-emerald-400">${d.agent_age_days.toFixed(1)}d</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 text-center">
+              <div class="text-slate-400">Episodes</div>
+              <div class="text-lg font-mono">${d.total_episodes}</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 text-center">
+              <div class="text-slate-400">Patterns</div>
+              <div class="text-lg font-mono text-violet-400">${d.patterns.validated_patterns}</div>
+            </div>
+            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-2 text-center">
+              <div class="text-slate-400">Pairs</div>
+              <div class="text-lg font-mono text-cyan-400">${shData.resolved_pairs}</div>
+            </div>
+            <div class="col-span-2 rounded-lg bg-slate-950/40 border border-slate-800 p-2">
+              <div class="text-slate-400 mb-1">Last 24h</div>
+              <div class="grid grid-cols-2 gap-1">
+                <span>Patterns: <span class="font-mono text-emerald-400">${c24.patterns_created || 0}</span></span>
+                <span>Pairs: <span class="font-mono text-cyan-400">${c24.pairs_resolved || 0}</span></span>
+                <span>Confidence: <span class="font-mono">${(c24.confidence || 0).toFixed(2)}</span></span>
+                <span>Agreement: <span class="font-mono">${(c24.agreement_rate || 0).toFixed(1)}%</span></span>
+                <span>Overrides: <span class="font-mono text-amber-400">${c24.override_count || 0}</span></span>
+              </div>
+            </div>
+          </div>`;
+
+        } catch (e) {
+          document.getElementById("ev_influence").innerHTML = '<div class="text-xs text-rose-400">Error loading evolution</div>';
+        }
+      }
+
       // ---- Polling loop ----
       async function pollAll() {
         await Promise.allSettled([
           loadStatus(), loadHealth(), loadSurvival(), loadTreasury(),
           loadTimeline(), loadReasoning(), loadShadow(),
           loadAnalysts(), loadConsensus(),
+          loadEvolution(),
         ]);
         // Update banner from health data
         try {

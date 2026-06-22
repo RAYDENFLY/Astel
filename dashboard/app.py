@@ -952,6 +952,265 @@ def api_agent_timeline(limit: int = 20) -> Dict[str, Any]:
         return {"entries": [], "error": str(e)}
 
 
+@app.get("/api/agent/evolution")
+def api_agent_evolution() -> Dict[str, Any]:
+    """AI Evolution metrics — pattern growth, influence, pairs, scorecard, trends.
+
+    Returns current snapshot + historical trends (24h/7d/all-time) as
+    sparkline-compatible arrays.
+    """
+    try:
+        storage = _get_agent_storage()
+        # Access raw psycopg2 connection for complex aggregation queries
+        conn = storage._get_conn()
+        cur = conn.cursor()
+
+        def fetch_one(sql):
+            cur.execute(sql)
+            return cur.fetchone()
+
+        def fetch_all(sql):
+            cur.execute(sql)
+            return cur.fetchall()
+
+        # ── Pattern stats ──
+        row = fetch_one("""
+            SELECT
+              COUNT(*) FILTER (WHERE validated=TRUE) as validated_patterns,
+              COUNT(*) FILTER (WHERE active=TRUE) as active_patterns,
+              COALESCE(AVG(confidence_score),0) as avg_confidence,
+              COALESCE(AVG(validation_score),0) as avg_validation_score
+            FROM semantic_patterns
+        """)
+        patterns = {
+            "validated_patterns": int(row[0]),
+            "active_patterns": int(row[1]),
+            "avg_confidence": round(float(row[2] or 0), 4),
+            "avg_validation_score": round(float(row[3] or 0), 4),
+        }
+
+        # ── Memory influence stats ──
+        row = fetch_one("""
+            SELECT
+              COUNT(*) as total_evaluations,
+              COALESCE(SUM(CASE WHEN agreement='AGREE' THEN 1 ELSE 0 END),0) as agreements,
+              COALESCE(SUM(CASE WHEN agreement='DISAGREE' THEN 1 ELSE 0 END),0) as disagreements,
+              COALESCE(SUM(CASE WHEN influence_weight > 0 THEN 1 ELSE 0 END),0) as overrides,
+              COALESCE(SUM(CASE WHEN agreement='DISAGREE' AND influence_weight = 0 THEN 1 ELSE 0 END),0) as blocked_overrides
+            FROM shadow_memory_influence
+        """)
+        mem = {
+            "influence_weight": 0.15,
+            "total_evaluations": int(row[0]),
+            "agreements": int(row[1]),
+            "disagreements": int(row[2]),
+            "overrides": int(row[3]),
+            "blocked_overrides": int(row[4]),
+            "agreement_rate": round(int(row[1]) / max(1, int(row[0])) * 100, 1),
+        }
+
+        # ── Shadow/pair stats ──
+        row = fetch_one("SELECT COUNT(*) FROM shadow_observations")
+        row2 = fetch_one("SELECT COUNT(*) FROM shadow_observations WHERE status='RESOLVED'")
+        row3 = fetch_one("""
+            SELECT COUNT(*) FROM shadow_observations so
+            JOIN memory_attributions ma ON ma.plan_id = so.plan_id
+            WHERE so.status='RESOLVED'
+        """)
+        sh = {
+            "total_observations": int(row[0]),
+            "resolved_observations": int(row2[0]),
+            "resolved_pairs": int(row3[0]),
+            "pair_coverage_pct": round(int(row3[0]) / max(1, int(row[0])) * 100, 1),
+        }
+
+        # ── Average contribution ──
+        row = fetch_one("SELECT COALESCE(AVG(memory_contribution_score),0) FROM memory_attributions WHERE outcome_quality NOT IN ('pending')")
+        avg_contrib = round(float(row[0]), 4)
+
+        # ── Scorecard ──
+        sc = {
+            "patterns": patterns["validated_patterns"],
+            "pairs": sh["resolved_pairs"],
+            "confidence": patterns["avg_confidence"],
+            "contribution": avg_contrib,
+            "agreement_rate": mem["agreement_rate"],
+        }
+
+        # ── AI Evolution Score ──
+        pattern_health = min(100, sc["patterns"] / 5 * 100)
+        pair_health = min(100, sc["pairs"] / 500 * 100)
+        conf_health = sc["confidence"] * 100
+        contrib_health = sc["contribution"] * 100
+        agree_health = sc["agreement_rate"]
+        evolution_score = round(
+            pattern_health * 0.25 +
+            pair_health * 0.25 +
+            conf_health * 0.20 +
+            contrib_health * 0.15 +
+            agree_health * 0.15,
+            1,
+        )
+        if evolution_score >= 80:
+            status_label = "Advanced"
+        elif evolution_score >= 60:
+            status_label = "Learning"
+        elif evolution_score >= 40:
+            status_label = "Improving"
+        else:
+            status_label = "Stable"
+        # Trend: compare to 24h target (simplified — based on pair growth)
+        trend_icon = "\u2191 Improving" if sc["pairs"] > 0 else "\u2192 Stable"
+        status_display = f"{status_label} \u2022 {trend_icon}"
+        evolution = {"score": evolution_score, "status": status_display}
+
+        # ── Historical trends (all-time, bucketed) ──
+        # Pattern growth over time (from first_seen dates)
+        pattern_trend = fetch_all("""
+            SELECT DATE(first_seen) as day, COUNT(*) as new_patterns
+            FROM semantic_patterns GROUP BY DATE(first_seen) ORDER BY day
+        """)
+        patterns_timeline = [{"day": str(r[0]), "new": int(r[1])} for r in pattern_trend]
+
+        # Shadow resolution trend over time
+        shadow_trend = fetch_all("""
+            SELECT DATE(so.ts) as day,
+                   COUNT(*) as observed,
+                   SUM(CASE WHEN so.status='RESOLVED' THEN 1 ELSE 0 END) as resolved
+            FROM shadow_observations so
+            GROUP BY DATE(so.ts) ORDER BY day
+        """)
+        shadow_timeline = [{"day": str(r[0]), "observed": int(r[1]), "resolved": int(r[2])} for r in shadow_trend]
+
+        # Pair resolution trend
+        pair_trend = fetch_all("""
+            SELECT DATE(so.ts) as day, COUNT(*) as pairs
+            FROM shadow_observations so
+            JOIN memory_attributions ma ON ma.plan_id = so.plan_id
+            WHERE so.status='RESOLVED'
+            GROUP BY DATE(so.ts) ORDER BY day
+        """)
+        pair_timeline = [{"day": str(r[0]), "pairs": int(r[1])} for r in pair_trend]
+
+        # SMI activity trend
+        smi_trend = fetch_all("""
+            SELECT DATE(ts) as day,
+                   SUM(CASE WHEN agreement='AGREE' THEN 1 ELSE 0 END) as agrees,
+                   SUM(CASE WHEN agreement='DISAGREE' THEN 1 ELSE 0 END) as disagrees,
+                   SUM(CASE WHEN influence_weight > 0 THEN 1 ELSE 0 END) as overrides
+            FROM shadow_memory_influence
+            GROUP BY DATE(ts) ORDER BY day
+        """)
+        smi_timeline = [{"day": str(r[0]), "agrees": int(r[1]), "disagrees": int(r[2]), "overrides": int(r[3])} for r in smi_trend]
+
+        # ── Additional queries for P1 panels ──
+        # Total episodes
+        row4 = fetch_one("SELECT COUNT(*) FROM agent_episodes")
+        row5 = fetch_one("SELECT COUNT(*) FROM agent_episodes WHERE resolved=TRUE")
+        # Agent age
+        row6 = fetch_one("SELECT EXTRACT(EPOCH FROM (NOW() - MIN(ts))) / 86400 FROM agent_episodes")
+        age_days = round(float(row6[0] or 0), 1)
+
+        # Episodes timeline
+        eps_trend = fetch_all("""
+            SELECT DATE(ts) as day, COUNT(*) as eps,
+                   SUM(CASE WHEN resolved=TRUE THEN 1 ELSE 0 END) as resolved_eps
+            FROM agent_episodes GROUP BY DATE(ts) ORDER BY day
+        """)
+        episodes_timeline = [{"day": str(r[0]), "eps": int(r[1]), "resolved": int(r[2])} for r in eps_trend]
+
+        # All patterns for leaderboard
+        all_patterns = fetch_all("""
+            SELECT id, pattern_key, sample_size, success_rate,
+                   confidence_score, validation_score, active, validated
+            FROM semantic_patterns ORDER BY sample_size DESC
+        """)
+        patterns_list = [{
+            "id": int(r[0]), "pattern_key": str(r[1]), "sample_size": int(r[2]),
+            "success_rate": round(float(r[3] or 0), 4),
+            "confidence_score": round(float(r[4] or 0), 4),
+            "validation_score": round(float(r[5] or 0), 4),
+            "active": bool(r[6]), "validated": bool(r[7])
+        } for r in all_patterns]
+
+        # Override candidates
+        overrides_list = fetch_all("""
+            SELECT id, ts, planner_action, memory_action,
+                   planner_confidence, memory_confidence, shadow_influence_score
+            FROM shadow_memory_influence WHERE agreement='DISAGREE' ORDER BY ts
+        """)
+        override_candidates = [{
+            "id": int(r[0]), "ts": str(r[1]),
+            "planner_action": str(r[2]), "memory_action": str(r[3]),
+            "planner_confidence": round(float(r[4] or 0), 4),
+            "memory_confidence": round(float(r[5] or 0), 4),
+            "confidence_delta": round(float(r[5] or 0) - float(r[4] or 0), 4),
+            "shadow_influence_score": round(float(r[6] or 0), 4),
+        } for r in overrides_list]
+
+        # Lifecycle stage calculation
+        life_stages = [
+            {"stage": 1, "name": "Rule Based", "complete": True, "pct": 100},
+            {"stage": 2, "name": "Memory Collection", "complete": True, "pct": 100},
+            {"stage": 3, "name": "Pattern Learning", "complete": True, "pct": 100},
+            {"stage": 4, "name": "Controlled Influence", "complete": False,
+             "pct": round(evolution_score / 100 * 100, 0)},
+            {"stage": 5, "name": "Autonomous Optimization", "complete": False, "pct": 0},
+        ]
+        current_stage = 4 if evolution_score >= 20 else 3 if evolution_score >= 10 else 2
+
+        # Total life progress
+        life_progress = round((3 + evolution_score/100) / 5 * 100, 0)
+
+        # What changed recently (last 48h changes) ──
+        changes = []
+        if patterns["validated_patterns"] > 0:
+            changes.append(f"+{patterns['validated_patterns']} validated patterns")
+        if sc["pairs"] > 0:
+            changes.append(f"+{sc['pairs']} resolved pairs")
+        if mem["disagreements"] > 0:
+            changes.append(f"{mem['agreement_rate']}% agreement rate")
+        if mem["influence_weight"] > 0:
+            changes.append("influence weight activated")
+
+        changes_24h = {
+            "patterns_created": patterns["validated_patterns"],
+            "pairs_resolved": sc["pairs"],
+            "confidence": patterns["avg_confidence"],
+            "agreement_rate": mem["agreement_rate"],
+            "override_count": mem["overrides"],
+        }
+
+        conn.close()
+        return {
+            "patterns": patterns,
+            "memory_influence": mem,
+            "shadow_growth": sh,
+            "scorecard": sc,
+            "evolution": evolution,
+            "trends": {
+                "patterns": patterns_timeline,
+                "shadow": shadow_timeline,
+                "pairs": pair_timeline,
+                "influence": smi_timeline,
+                "episodes": episodes_timeline,
+            },
+            "all_patterns": patterns_list,
+            "override_candidates": override_candidates,
+            "agent_age_days": age_days,
+            "total_episodes": int(row4[0]),
+            "resolved_episodes": int(row5[0]),
+            "lifecycle": {
+                "stages": life_stages,
+                "current_stage": current_stage,
+                "progress_pct": life_progress,
+            },
+            "changes_24h": changes_24h,
+            "recent_changes": changes,
+        }
+    except Exception as e:
+        return {"error": str(e), "patterns": {}, "memory_influence": {}, "shadow_growth": {}, "scorecard": {}, "evolution": {}, "trends": {}, "recent_changes": []}
+
 @app.get("/api/agent/health")
 def api_agent_health() -> Dict[str, Any]:
     """Computed health metrics for the agent.
