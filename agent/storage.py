@@ -198,6 +198,39 @@ CREATE TABLE IF NOT EXISTS memory_attributions (
 );
 CREATE INDEX IF NOT EXISTS idx_memory_attributions_ts ON memory_attributions(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_attributions_pending ON memory_attributions(episode_id) WHERE outcome_quality='pending';
+
+-- Phase 9.0 — Order execution table (testnet/prod)
+CREATE TABLE IF NOT EXISTS agent_orders (
+    id SERIAL PRIMARY KEY,
+    order_id TEXT NOT NULL UNIQUE,
+    exchange_order_id TEXT,
+    contract TEXT NOT NULL,
+    side TEXT NOT NULL,
+    size DOUBLE PRECISION NOT NULL DEFAULT 0,
+    order_type TEXT NOT NULL DEFAULT 'MARKET',
+    price DOUBLE PRECISION,
+    stop_price DOUBLE PRECISION,
+    tp_price DOUBLE PRECISION,
+    sl_price DOUBLE PRECISION,
+    reduce_only BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    filled_size DOUBLE PRECISION NOT NULL DEFAULT 0,
+    avg_fill_price DOUBLE PRECISION,
+    fees DOUBLE PRECISION NOT NULL DEFAULT 0,
+    slippage DOUBLE PRECISION NOT NULL DEFAULT 0,
+    latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+    error TEXT,
+    execution_mode TEXT NOT NULL DEFAULT 'TESTNET',
+    plan_id INTEGER REFERENCES agent_plans(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    opened_at TIMESTAMPTZ,
+    closed_at TIMESTAMPTZ,
+    realized_pnl DOUBLE PRECISION
+);
+CREATE INDEX IF NOT EXISTS idx_agent_orders_order_id ON agent_orders(order_id);
+CREATE INDEX IF NOT EXISTS idx_agent_orders_contract ON agent_orders(contract);
+CREATE INDEX IF NOT EXISTS idx_agent_orders_status ON agent_orders(status);
+CREATE INDEX IF NOT EXISTS idx_agent_orders_created ON agent_orders(created_at DESC);
 """
 # ===================== PostgreSQL =====================
 class PostgresAgentStorage(AgentStorage):
