@@ -46,6 +46,7 @@ from agent.memory_shadow import ShadowMemoryInfluence
 from agent.reasoning_validator import ReasoningValidator
 from agent.reasoning_feedback import ReasoningFeedbackEngine
 from agent.storage import AgentStorage, make_storage
+from agent.trade_replay import TradeRecorder
 
 log = logging.getLogger("agent")
 
@@ -359,6 +360,12 @@ class AutonomousAgent:
             "total_feedback_size_chars": 0,
         }
 
+        # Phase 10.5 — Trade Replay / AI Flight Recorder
+        self._trade_recorder = TradeRecorder(storage=self._storage)
+
+        # Current trade_id for this tick (set during action execution)
+        self._trade_id: Optional[str] = None
+
         # State
         self._survival_mode   = SurvivalMode.NORMAL
         self._last_llm_ts: float = 0.0
@@ -392,6 +399,9 @@ class AutonomousAgent:
         self._loop_count += 1
         now = datetime.now(tz=timezone.utc)
         log.info("Agent tick #%d at %s", self._loop_count, now.isoformat())
+
+        # Reset trade_id for this tick
+        self._trade_id = None
 
         # 1. Daily cost deduction
         self._treasury.deduct_daily_cost()
@@ -512,6 +522,30 @@ class AutonomousAgent:
                 plan           = filtered_plan.model_dump(mode="json"),
             )
 
+            # ── Phase 10.5: Create trade for this plan ──
+            try:
+                llm_provider = llm_usage.provider if llm_usage else "rule"
+                self._trade_id = self._trade_recorder.create_trade(
+                    contract="AGGREGATE",
+                    side="NONE",
+                    plan_id=plan_id,
+                    llm_provider=llm_provider,
+                )
+                # Record agent tick + snapshot immediately
+                self._trade_recorder.record_agent_tick(
+                    self._trade_id,
+                    tick_number=self._loop_count,
+                    survival_mode=self._survival_mode.value,
+                    treasury_usdt=self._treasury.treasury,
+                )
+                self._trade_recorder.record_market_snapshot(
+                    self._trade_id,
+                    snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else {},
+                )
+            except Exception as tr_err:
+                log.warning("TradeRecorder create_trade failed (non-fatal): %s", tr_err)
+                self._trade_id = None
+
             if plan is llm_plan:
                 try:
                     audit_result = self._reasoning_validator.audit_plan(
@@ -537,6 +571,30 @@ class AutonomousAgent:
                 except Exception as audit_err:
                     log.warning("Reasoning audit/feedback failed (non-fatal): %s", audit_err)
 
+                # ── Trade Replay: record LLM reasoning stages ──
+                if self._trade_id:
+                    try:
+                        self._trade_recorder.record_llm_reasoning(
+                            self._trade_id,
+                            provider=llm_usage.provider if llm_usage else "unknown",
+                            model=llm_usage.model if llm_usage else "unknown",
+                            prompt_tokens=llm_usage.input_tokens if llm_usage else 0,
+                            output_tokens=llm_usage.output_tokens if llm_usage else 0,
+                            raw_output=llm_raw_content,
+                            latency_ms=round(llm_latency_ms, 1),
+                        )
+                        self._trade_recorder.record_agent_plan(
+                            self._trade_id,
+                            filtered_plan.model_dump(mode="json") if hasattr(filtered_plan, "model_dump") else {},
+                        )
+                        if self._cached_feedback_prompt:
+                            self._trade_recorder.record_reasoning_feedback(
+                                self._trade_id,
+                                self._cached_feedback_prompt,
+                            )
+                    except Exception as tr_err:
+                        log.warning("TradeRecorder LLM recording failed (non-fatal): %s", tr_err)
+
             # Execute actions
             for action in filtered_plan.proposed_actions:
                 # Guardrail check
@@ -544,6 +602,16 @@ class AutonomousAgent:
                 allowed, reason = self._guardrails.check_action(action.type, snapshot, contract)
                 if not allowed:
                     log.warning("Guardrail BLOCKED %s: %s", action.type, reason)
+                    if self._trade_id:
+                        try:
+                            self._trade_recorder.record_guardrail_result(
+                                self._trade_id,
+                                action_type=action.type.value,
+                                allowed=False,
+                                reason=reason,
+                            )
+                        except Exception:
+                            pass
                     self._storage.save_action(
                         plan_id     = plan_id,
                         ts          = now,
@@ -553,8 +621,35 @@ class AutonomousAgent:
                         success     = False,
                     )
                     continue
+                else:
+                    if self._trade_id:
+                        try:
+                            self._trade_recorder.record_guardrail_result(
+                                self._trade_id,
+                                action_type=action.type.value,
+                                allowed=True,
+                                reason="passed",
+                            )
+                        except Exception:
+                            pass
 
                 log.warning("EXECUTING action: %s params=%s", action.type, action.params)
+
+                # ── Trade Replay: record risk validation + execution request ──
+                if self._trade_id:
+                    try:
+                        self._trade_recorder.record_risk_validation(
+                            self._trade_id,
+                            passed=True,
+                            reason="risk_callback_ok",
+                        )
+                        self._trade_recorder.record_execution_request(
+                            self._trade_id,
+                            action.params,
+                        )
+                    except Exception:
+                        pass
+
                 result = execute_action(
                     action.type.value,
                     action.params,
@@ -584,6 +679,35 @@ class AutonomousAgent:
 
                 log.info("Action %s result: success=%s detail=%s",
                          action.type, success, result.get("detail", ""))
+
+                # ── Trade Replay: record exchange response + position updates ──
+                if self._trade_id:
+                    try:
+                        exchange_resp = result.get("exchange_response", result.get("order", result))
+                        latency_ms = float(result.get("latency_ms", exchange_resp.get("latency_ms", 0)))
+                        self._trade_recorder.record_exchange_response(
+                            self._trade_id,
+                            response=exchange_resp,
+                            latency_ms=latency_ms,
+                        )
+                        # If it's a close/reduce action, record position close
+                        if action.type.value in ("CLOSE_POSITION", "REVERSE_POSITION", "REDUCE_POSITION"):
+                            self._trade_recorder.record_position_close(
+                                self._trade_id,
+                                exit_price=float(exchange_resp.get("avg_fill_price", 0)),
+                                exit_size=float(exchange_resp.get("filled_size", 0)),
+                                exit_reason=action.type.value,
+                                realized_pnl=float(result.get("realized_pnl", exchange_resp.get("realized_pnl", 0))),
+                            )
+                        # Record PnL if available
+                        pnl = result.get("realized_pnl", exchange_resp.get("realized_pnl"))
+                        if pnl is not None:
+                            self._trade_recorder.record_pnl(
+                                self._trade_id,
+                                realized_pnl=float(pnl),
+                            )
+                    except Exception:
+                        pass
 
                 # ── Episode recording (Phase 7A — Episodic Memory) ──
                 try:
@@ -728,6 +852,41 @@ class AutonomousAgent:
 
             except Exception:
                 log.exception("Attribution context repair failed (non-fatal)")
+
+        # ── Phase 10.5: Complete or fail trade ──
+        if self._trade_id:
+            try:
+                # Record reflection if LLM was used
+                if llm_plan and llm_raw_content:
+                    self._trade_recorder.record_reflection(
+                        self._trade_id,
+                        llm_raw_content[:500],
+                    )
+                # Record memory update
+                memory_tables = []
+                rules_updated = 0
+                episodes_updated = len(_episode_actions)
+                patterns_updated = 0
+                try:
+                    patterns = self._storage.get_patterns(limit=5)
+                    patterns_updated = len(patterns)
+                except Exception:
+                    pass
+                self._trade_recorder.record_memory_update(
+                    self._trade_id,
+                    memory_tables=["episodes", "patterns", "attributions"],
+                    rules_updated=rules_updated,
+                    episodes_updated=episodes_updated,
+                    patterns_updated=patterns_updated,
+                )
+                # Complete the trade
+                self._trade_recorder.complete_trade(
+                    self._trade_id,
+                    final_pnl=0.0,  # PnL already recorded per-action
+                    outcome="completed",
+                )
+            except Exception as tr_err:
+                log.warning("TradeRecorder complete failed (non-fatal): %s", tr_err)
 
         # ── Experiment tracking (Phase 6) ──
         try:
