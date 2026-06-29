@@ -273,6 +273,16 @@ class AutonomousAgent:
             procedural_memory=self._procedural_memory,
         )
 
+        # Phase 9.1 — Memory Context Builder (rich context for LLM reasoning)
+        from agent.memory_context import MemoryContextBuilder
+        self._memory_context = MemoryContextBuilder(
+            storage=self._storage,
+            procedural_memory=self._procedural_memory,
+            shadow_influence=self._shadow_memory,
+            attribution_engine=self._attribution_engine,
+            episode_resolver=self._episode_resolver,
+        )
+
         # State
         self._survival_mode   = SurvivalMode.NORMAL
         self._last_llm_ts: float = 0.0
@@ -357,7 +367,31 @@ class AutonomousAgent:
         llm_plan: Optional[AgentPlan] = None
         should_call_llm = self._should_call_llm(snapshot)
         if should_call_llm:
-            llm_plan, usage = self._llm.generate_plan(snapshot)
+            # Phase 9.1 — Build rich context for LLM reasoning
+            extra_context: Optional[str] = None
+            context_start = time.time()
+            try:
+                extra_context = self._memory_context.build_context(
+                    snapshot=snapshot,
+                    survival_mode=self._survival_mode.value,
+                    analyst_consensus=summary.get("consensus", "neutral"),
+                    debate_verdict="unknown",
+                    planner_confidence=0.5,
+                    planner_action="HOLD",
+                    ml_prediction=None,
+                )
+                ctx_elapsed = (time.time() - context_start) * 1000
+                ctx_chars = len(extra_context)
+                ctx_tokens_est = ctx_chars // 4
+                log.info(
+                    "MemoryContext built: chars=%d tokens_est=%d latency=%.1fms",
+                    ctx_chars, ctx_tokens_est, ctx_elapsed,
+                )
+            except Exception as ctx_err:
+                log.warning("MemoryContextBuilder failed (continuing with snapshot only): %s", ctx_err)
+                extra_context = None
+
+            llm_plan, usage = self._llm.generate_plan(snapshot, extra_context=extra_context)
             self._last_llm_ts = time.time()
             self._treasury.add_llm_cost(usage.cost_usd)
             log.info("LLM plan generated: summary=%s confidence=%.2f emergency=%s",

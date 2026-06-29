@@ -62,12 +62,18 @@ CLOSE_POSITION, REVERSE_POSITION, SET_SURVIVAL_MODE, UPDATE_CONFIG
 """
 
 
-def _build_user_prompt(snapshot: AgentSnapshot) -> str:
-    return (
+def _build_user_prompt(snapshot: AgentSnapshot, extra_context: Optional[str] = None) -> str:
+    prompt = (
         "Current system snapshot:\n\n"
         + snapshot.to_prompt_text()
-        + "\n\nAnalyze and respond with AgentPlan JSON only."
     )
+    if extra_context:
+        prompt += "\n\n=========================\n"
+        prompt += "COMPLETE INTERNAL STATE\n"
+        prompt += "=========================\n"
+        prompt += extra_context
+    prompt += "\n\nAnalyze and respond with AgentPlan JSON only."
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +119,8 @@ class OllamaClient:
         )
         return content, usage
 
-    def generate(self, snapshot: AgentSnapshot) -> Tuple[str, TokenUsage]:
-        user_prompt = _build_user_prompt(snapshot)
+    def generate(self, snapshot: AgentSnapshot, extra_context: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        user_prompt = _build_user_prompt(snapshot, extra_context)
         # Coba primary dulu
         try:
             log.info("Ollama generate: model=%s", self.primary_model)
@@ -192,8 +198,8 @@ class GroqClient:
         )
         return content, usage
 
-    def generate(self, snapshot: AgentSnapshot) -> Tuple[str, TokenUsage]:
-        user_prompt = _build_user_prompt(snapshot)
+    def generate(self, snapshot: AgentSnapshot, extra_context: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        user_prompt = _build_user_prompt(snapshot, extra_context)
         try:
             log.info("Groq generate: model=%s", self.model)
             return self._chat(self.model, user_prompt)
@@ -219,8 +225,8 @@ class DeepSeekClient:
         self.model = model
         self.timeout = timeout
 
-    def generate(self, snapshot: AgentSnapshot) -> Tuple[str, TokenUsage]:
-        user_prompt = _build_user_prompt(snapshot)
+    def generate(self, snapshot: AgentSnapshot, extra_context: Optional[str] = None) -> Tuple[str, TokenUsage]:
+        user_prompt = _build_user_prompt(snapshot, extra_context)
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -305,7 +311,7 @@ class LLMRouter:
             and self._cloud_spent_today_usd < self.cloud_budget_per_day_usd
         )
 
-    def generate_plan(self, snapshot: AgentSnapshot) -> Tuple[AgentPlan, TokenUsage]:
+    def generate_plan(self, snapshot: AgentSnapshot, extra_context: Optional[str] = None) -> Tuple[AgentPlan, TokenUsage]:
         """
         Panggil LLM sesuai urutan priority.
         Jika semua gagal → kembalikan safe default plan (PAUSE_ENTRIES).
@@ -315,7 +321,7 @@ class LLMRouter:
 
         # 1. Coba Ollama lokal
         try:
-            raw_content, usage = self._ollama.generate(snapshot)
+            raw_content, usage = self._ollama.generate(snapshot, extra_context=extra_context)
             log.info("LLM response from Ollama model=%s tokens_in=%d tokens_out=%d",
                      usage.model, usage.input_tokens, usage.output_tokens)
         except Exception as ollama_err:
@@ -324,7 +330,7 @@ class LLMRouter:
             # 2. Fallback Groq (free tier, tidak perlu cek budget)
             if self._groq:
                 try:
-                    raw_content, usage = self._groq.generate(snapshot)
+                    raw_content, usage = self._groq.generate(snapshot, extra_context=extra_context)
                     log.warning("Using Groq fallback. model=%s tokens_in=%d tokens_out=%d",
                                 usage.model, usage.input_tokens, usage.output_tokens)
                 except Exception as groq_err:
@@ -333,7 +339,7 @@ class LLMRouter:
             # 3. Fallback DeepSeek (paid, cek budget)
             if not raw_content and self._deepseek and self._within_cloud_budget():
                 try:
-                    raw_content, usage = self._deepseek.generate(snapshot)
+                    raw_content, usage = self._deepseek.generate(snapshot, extra_context=extra_context)
                     self._cloud_spent_today_usd += (usage.cost_usd if usage else 0.0)
                     log.warning("Using DeepSeek fallback. model=%s cost_today=$%.5f",
                                 usage.model if usage else "?", self._cloud_spent_today_usd)
