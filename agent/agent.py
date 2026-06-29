@@ -43,6 +43,8 @@ from agent.memory_attribution import MemoryAttributionEngine
 from agent.pattern_validator import PatternValidator
 from agent.procedural_memory import ProceduralMemory
 from agent.memory_shadow import ShadowMemoryInfluence
+from agent.reasoning_validator import ReasoningValidator
+from agent.reasoning_feedback import ReasoningFeedbackEngine
 from agent.storage import AgentStorage, make_storage
 
 log = logging.getLogger("agent")
@@ -283,6 +285,25 @@ class AutonomousAgent:
             episode_resolver=self._episode_resolver,
         )
 
+        # Phase 9.2 — Reasoning Validator (audits every LLM plan)
+        self._reasoning_validator = ReasoningValidator(storage=self._storage)
+
+        # Phase 9.3 — Reasoning Feedback Engine (self-reflection loop)
+        self._reasoning_feedback = ReasoningFeedbackEngine(storage=self._storage)
+        self._cached_feedback_prompt: Optional[str] = None
+
+        # Phase 9.3.6 — Runtime metrics tracking
+        self._rf_metrics = {
+            "validator_calls": 0,
+            "feedback_calls": 0,
+            "feedback_generated": 0,
+            "feedback_injected": 0,
+            "total_context_size_chars": 0,
+            "total_llm_latency_ms": 0,
+            "total_usage_score": 0.0,
+            "total_feedback_size_chars": 0,
+        }
+
         # State
         self._survival_mode   = SurvivalMode.NORMAL
         self._last_llm_ts: float = 0.0
@@ -365,6 +386,10 @@ class AutonomousAgent:
 
         # 6. LLM plan (hanya setiap llm_interval atau saat event penting)
         llm_plan: Optional[AgentPlan] = None
+        llm_usage: Optional[TokenUsage] = None
+        llm_context_size_chars = 0
+        llm_latency_ms = 0.0
+        llm_raw_content = ""
         should_call_llm = self._should_call_llm(snapshot)
         if should_call_llm:
             # Phase 9.1 — Build rich context for LLM reasoning
@@ -390,13 +415,27 @@ class AutonomousAgent:
             except Exception as ctx_err:
                 log.warning("MemoryContextBuilder failed (continuing with snapshot only): %s", ctx_err)
                 extra_context = None
+                ctx_chars = 0
 
+            if self._cached_feedback_prompt:
+                feedback_prompt = self._cached_feedback_prompt
+                extra_context = "\n\n".join(part for part in [extra_context, feedback_prompt] if part)
+                self._rf_metrics["feedback_injected"] += 1
+                self._rf_metrics["total_feedback_size_chars"] += len(feedback_prompt)
+                log.info("Reasoning feedback injected: chars=%d", len(feedback_prompt))
+
+            llm_start = time.time()
             llm_plan, usage = self._llm.generate_plan(snapshot, extra_context=extra_context)
+            llm_usage = usage
+            llm_context_size_chars = len(extra_context or "")
+            llm_latency_ms = getattr(self._llm, "last_latency_ms", (time.time() - llm_start) * 1000)
+            llm_raw_content = getattr(self._llm, "last_raw_content", "")
             self._last_llm_ts = time.time()
             self._treasury.add_llm_cost(usage.cost_usd)
             log.info("LLM plan generated: summary=%s confidence=%.2f emergency=%s",
                      llm_plan.summary, llm_plan.confidence, llm_plan.emergency)
 
+            # Phase 9.2/9.3 — Reasonng audit + feedback loop
         # 7. Merge dan execute plans
         # Rule-based plan dieksekusi dulu (priority), lalu LLM plan
         plan_id: Optional[int] = None
@@ -417,6 +456,31 @@ class AutonomousAgent:
                 input_snapshot = snapshot.model_dump(mode="json"),
                 plan           = filtered_plan.model_dump(mode="json"),
             )
+
+            if plan is llm_plan:
+                try:
+                    audit_result = self._reasoning_validator.audit_plan(
+                        plan_id=plan_id,
+                        llm_provider=llm_usage.provider if llm_usage else "unknown",
+                        raw_content=llm_raw_content,
+                        plan=filtered_plan,
+                        context_size_chars=llm_context_size_chars,
+                        latency_ms=round(llm_latency_ms, 1),
+                    )
+                    self._rf_metrics["validator_calls"] += 1
+                    self._rf_metrics["total_usage_score"] += audit_result.get("memory_usage_score", 0)
+                    self._rf_metrics["total_context_size_chars"] += llm_context_size_chars
+                    self._rf_metrics["total_llm_latency_ms"] += llm_latency_ms
+
+                    self._reasoning_feedback.store_feedback(audit_id=None, plan_id=plan_id)
+                    self._rf_metrics["feedback_calls"] += 1
+
+                    new_feedback = self._reasoning_feedback.build_feedback_prompt(limit=20)
+                    if new_feedback:
+                        self._cached_feedback_prompt = new_feedback
+                        self._rf_metrics["feedback_generated"] += 1
+                except Exception as audit_err:
+                    log.warning("Reasoning audit/feedback failed (non-fatal): %s", audit_err)
 
             # Execute actions
             for action in filtered_plan.proposed_actions:

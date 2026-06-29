@@ -1027,6 +1027,32 @@ def api_agent_evolution() -> Dict[str, Any]:
         # ── Average contribution ──
         row = fetch_one("SELECT COALESCE(AVG(memory_contribution_score),0) FROM memory_attributions WHERE outcome_quality NOT IN ('pending')")
         avg_contrib = round(float(row[0]), 4)
+        row = fetch_one("SELECT COUNT(*), COALESCE(AVG(memory_usage_score),0), COALESCE(AVG(context_size_chars),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(CASE WHEN ml_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN procedural_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN episodic_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN shadow_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN portfolio_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN risk_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN treasury_used THEN 1 ELSE 0 END),0) FROM agent_reasoning_audit")
+        feedback_row = fetch_one("SELECT COUNT(*) FROM agent_reasoning_feedback")
+        validator_calls = int(row[0] or 0)
+        dimension_counts = {
+            "ML Prediction": int(row[4] or 0),
+            "Procedural Memory": int(row[5] or 0),
+            "Episodic Memory": int(row[6] or 0),
+            "Shadow Memory": int(row[7] or 0),
+            "Portfolio State": int(row[8] or 0),
+            "Risk State": int(row[9] or 0),
+            "Treasury": int(row[10] or 0),
+        }
+        trend_row = fetch_one("WITH recent AS (SELECT memory_usage_score, ROW_NUMBER() OVER (ORDER BY created_at DESC) as rn FROM agent_reasoning_audit ORDER BY created_at DESC LIMIT 10) SELECT COALESCE(AVG(CASE WHEN rn <= 5 THEN memory_usage_score END),0), COALESCE(AVG(CASE WHEN rn > 5 THEN memory_usage_score END),0) FROM recent")
+        recent_avg = float(trend_row[0] or 0)
+        older_avg = float(trend_row[1] or 0)
+        self_reflection = {
+            "status": "ACTIVE" if validator_calls > 0 else "READY",
+            "validator_calls": validator_calls,
+            "feedback_generated": int(feedback_row[0] or 0),
+            "feedback_injected": validator_calls,
+            "average_usage_score": round(float(row[1] or 0), 4),
+            "average_context_size": round(float(row[2] or 0), 1),
+            "average_latency": round(float(row[3] or 0), 1),
+            "most_ignored_dimension": min(dimension_counts, key=dimension_counts.get) if validator_calls else "None",
+            "improvement_trend": "IMPROVING" if recent_avg > older_avg + 0.02 else "DECLINING" if recent_avg < older_avg - 0.02 else "STABLE",
+        }
 
         # ── Scorecard ──
         sc = {
@@ -1184,6 +1210,7 @@ def api_agent_evolution() -> Dict[str, Any]:
         return {
             "patterns": patterns,
             "memory_influence": mem,
+            "self_reflection": self_reflection,
             "shadow_growth": sh,
             "scorecard": sc,
             "evolution": evolution,

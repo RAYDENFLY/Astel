@@ -84,7 +84,18 @@ class ReasoningAuditRecord:
 
     def _validate(self) -> Dict[str, Any]:
         """Analyze the raw LLM output for memory references."""
-        content_lower = self.raw_content.lower()
+        reasoning_text = ""
+        if self.plan.observations:
+            reasoning_text += " ".join(self.plan.observations) + " "
+        if self.plan.risks:
+            reasoning_text += " ".join(self.plan.risks) + " "
+        if self.plan.summary:
+            reasoning_text += self.plan.summary
+        for action in self.plan.proposed_actions:
+            if action.why:
+                reasoning_text += " " + action.why
+
+        content_lower = f"{self.raw_content} {reasoning_text}".lower()
         sections_used: Dict[str, Dict[str, Any]] = {}
         total_sections = len(REFERENCE_KEYWORDS)
         used_count = 0
@@ -109,18 +120,6 @@ class ReasoningAuditRecord:
                 }
 
         memory_usage_score = round(used_count / max(1, total_sections), 2)
-
-        # Extract reasoning from plan fields
-        reasoning_text = ""
-        if self.plan.observations:
-            reasoning_text += " ".join(self.plan.observations) + " "
-        if self.plan.risks:
-            reasoning_text += " ".join(self.plan.risks) + " "
-        if self.plan.summary:
-            reasoning_text += self.plan.summary
-        for action in self.plan.proposed_actions:
-            if action.why:
-                reasoning_text += " " + action.why
 
         return {
             "memory_usage_score": memory_usage_score,

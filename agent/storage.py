@@ -124,6 +124,19 @@ class AgentStorage(ABC):
     @abstractmethod
     def get_shadow_memory_influence_metrics(self) -> Dict[str, Any]: ...
 
+    # Phase 9.2 — Reasoning audit
+    @abstractmethod
+    def save_reasoning_audit(self, plan_id: int, llm_provider: str, memory_usage_score: float, ml_used: bool, procedural_used: bool, episodic_used: bool, shadow_used: bool, portfolio_used: bool, risk_used: bool, treasury_used: bool, reasoning_json: str, context_size_chars: int = 0, latency_ms: float = 0.0, raw_content_length: int = 0) -> None: ...
+
+    @abstractmethod
+    def get_reasoning_audits(self, limit: int = 20) -> List[Dict[str, Any]]: ...
+
+    @abstractmethod
+    def get_reasoning_audit_summary(self) -> Dict[str, Any]: ...
+
+    # Phase 9.3 — Reasoning feedback
+    @abstractmethod
+    def save_reasoning_feedback(self, plan_id: int, reflection: str, missing_dimensions: str, recommended_improvements: str, severity: str = "info") -> None: ...
 # ===================== PG Schema =====================
 PG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_plans (id SERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL, input_snapshot JSONB, plan_json JSONB, approved_by TEXT DEFAULT 'auto', executed_at TIMESTAMPTZ, status TEXT DEFAULT 'pending');
@@ -253,6 +266,18 @@ CREATE TABLE IF NOT EXISTS agent_reasoning_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_reasoning_audit_plan ON agent_reasoning_audit(plan_id);
 CREATE INDEX IF NOT EXISTS idx_reasoning_audit_created ON agent_reasoning_audit(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_reasoning_feedback (
+    id SERIAL PRIMARY KEY,
+    plan_id INTEGER REFERENCES agent_plans(id),
+    reflection TEXT NOT NULL DEFAULT '',
+    missing_dimensions JSONB NOT NULL DEFAULT '[]',
+    recommended_improvements JSONB NOT NULL DEFAULT '[]',
+    severity TEXT NOT NULL DEFAULT 'info',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reasoning_feedback_plan ON agent_reasoning_feedback(plan_id);
+CREATE INDEX IF NOT EXISTS idx_reasoning_feedback_created ON agent_reasoning_feedback(created_at DESC);
 """
 # ===================== PostgreSQL =====================
 class PostgresAgentStorage(AgentStorage):
@@ -601,6 +626,52 @@ class PostgresAgentStorage(AgentStorage):
         except Exception:
             return {"total_evaluations": 0, "agreement_count": 0, "disagreement_count": 0, "agreement_rate": 0.0, "disagreement_rate": 0.0, "avg_shadow_influence_score": 0.0, "avg_memory_confidence": 0.0}
 
+    # ---- Reasoning audit / feedback (Phase 9.2/9.3) ----
+    def save_reasoning_audit(self, plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars=0, latency_ms=0.0, raw_content_length=0) -> None:
+        with self._get_conn().cursor() as cur:
+            cur.execute(
+                "INSERT INTO agent_reasoning_audit (plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars, latency_ms, raw_content_length) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars, latency_ms, raw_content_length),
+            )
+
+    def get_reasoning_audits(self, limit=20) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM agent_reasoning_audit ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cur.fetchall(); cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception:
+            log.exception("get_reasoning_audits failed"); return []
+
+    def get_reasoning_audit_summary(self) -> Dict[str, Any]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT COUNT(*) as total, COALESCE(AVG(memory_usage_score),0), COALESCE(AVG(context_size_chars),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(CASE WHEN ml_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN procedural_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN episodic_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN shadow_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN portfolio_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN risk_used THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN treasury_used THEN 1 ELSE 0 END),0) FROM agent_reasoning_audit")
+                row = cur.fetchone()
+            total = int(row[0]) if row else 0
+            names = ["ml_prediction", "procedural_memory", "episodic_memory", "shadow_memory", "portfolio_state", "risk_state", "treasury"]
+            counts = [int(v or 0) for v in row[4:11]] if row else [0] * 7
+            rates = {name: round(count / max(1, total), 4) for name, count in zip(names, counts)}
+            most_ignored = min(rates, key=rates.get) if rates else "unknown"
+            return {
+                "total_audits": total,
+                "avg_memory_usage_score": round(float(row[1] or 0), 4),
+                "avg_context_size_chars": round(float(row[2] or 0), 1),
+                "avg_latency_ms": round(float(row[3] or 0), 1),
+                "most_ignored_dimension": most_ignored,
+                "dimension_usage_rates": rates,
+            }
+        except Exception:
+            log.exception("get_reasoning_audit_summary failed")
+            return {"total_audits": 0, "avg_memory_usage_score": 0.0, "avg_context_size_chars": 0.0, "avg_latency_ms": 0.0, "most_ignored_dimension": "unknown", "dimension_usage_rates": {}}
+
+    def save_reasoning_feedback(self, plan_id, reflection, missing_dimensions, recommended_improvements, severity="info") -> None:
+        with self._get_conn().cursor() as cur:
+            cur.execute(
+                "INSERT INTO agent_reasoning_feedback (plan_id, reflection, missing_dimensions, recommended_improvements, severity) VALUES (%s,%s,%s,%s,%s)",
+                (plan_id, reflection, missing_dimensions, recommended_improvements, severity),
+            )
+
 # ===================== SQLite Schema =====================
 SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, input_snapshot TEXT, plan_json TEXT, approved_by TEXT DEFAULT 'auto', executed_at TEXT, status TEXT DEFAULT 'pending');
@@ -655,6 +726,37 @@ CREATE TABLE IF NOT EXISTS shadow_memory_influence (
 CREATE INDEX IF NOT EXISTS idx_shadow_memory_influence_ts ON shadow_memory_influence(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_shadow_memory_influence_agreement ON shadow_memory_influence(agreement);
 CREATE INDEX IF NOT EXISTS idx_shadow_memory_influence_plan ON shadow_memory_influence(plan_id);
+CREATE TABLE IF NOT EXISTS agent_reasoning_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER REFERENCES agent_plans(id),
+    llm_provider TEXT NOT NULL DEFAULT 'unknown',
+    memory_usage_score REAL NOT NULL DEFAULT 0,
+    ml_used INTEGER NOT NULL DEFAULT 0,
+    procedural_used INTEGER NOT NULL DEFAULT 0,
+    episodic_used INTEGER NOT NULL DEFAULT 0,
+    shadow_used INTEGER NOT NULL DEFAULT 0,
+    portfolio_used INTEGER NOT NULL DEFAULT 0,
+    risk_used INTEGER NOT NULL DEFAULT 0,
+    treasury_used INTEGER NOT NULL DEFAULT 0,
+    reasoning_json TEXT NOT NULL DEFAULT '{}',
+    context_size_chars INTEGER NOT NULL DEFAULT 0,
+    latency_ms REAL NOT NULL DEFAULT 0,
+    raw_content_length INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reasoning_audit_plan ON agent_reasoning_audit(plan_id);
+CREATE INDEX IF NOT EXISTS idx_reasoning_audit_created ON agent_reasoning_audit(created_at DESC);
+CREATE TABLE IF NOT EXISTS agent_reasoning_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER REFERENCES agent_plans(id),
+    reflection TEXT NOT NULL DEFAULT '',
+    missing_dimensions TEXT NOT NULL DEFAULT '[]',
+    recommended_improvements TEXT NOT NULL DEFAULT '[]',
+    severity TEXT NOT NULL DEFAULT 'info',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reasoning_feedback_plan ON agent_reasoning_feedback(plan_id);
+CREATE INDEX IF NOT EXISTS idx_reasoning_feedback_created ON agent_reasoning_feedback(created_at DESC);
 """
 
 class SQLiteAgentStorage(AgentStorage):
@@ -954,6 +1056,52 @@ class SQLiteAgentStorage(AgentStorage):
             }
         except Exception:
             return {"total_evaluations": 0, "agreement_count": 0, "disagreement_count": 0, "agreement_rate": 0.0, "disagreement_rate": 0.0, "avg_shadow_influence_score": 0.0, "avg_memory_confidence": 0.0}
+
+    # ---- Reasoning audit / feedback (Phase 9.2/9.3) ----
+    def save_reasoning_audit(self, plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars=0, latency_ms=0.0, raw_content_length=0) -> None:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        with self._con() as con:
+            con.execute(
+                "INSERT INTO agent_reasoning_audit (plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars, latency_ms, raw_content_length, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (plan_id, llm_provider, memory_usage_score, int(ml_used), int(procedural_used), int(episodic_used), int(shadow_used), int(portfolio_used), int(risk_used), int(treasury_used), reasoning_json, context_size_chars, latency_ms, raw_content_length, now),
+            )
+
+    def get_reasoning_audits(self, limit=20) -> List[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                return [dict(r) for r in con.execute("SELECT * FROM agent_reasoning_audit ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+        except Exception:
+            log.exception("get_reasoning_audits failed"); return []
+
+    def get_reasoning_audit_summary(self) -> Dict[str, Any]:
+        try:
+            with self._con() as con:
+                row = con.execute("SELECT COUNT(*) as total, COALESCE(AVG(memory_usage_score),0), COALESCE(AVG(context_size_chars),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(ml_used),0), COALESCE(SUM(procedural_used),0), COALESCE(SUM(episodic_used),0), COALESCE(SUM(shadow_used),0), COALESCE(SUM(portfolio_used),0), COALESCE(SUM(risk_used),0), COALESCE(SUM(treasury_used),0) FROM agent_reasoning_audit").fetchone()
+            total = int(row[0]) if row else 0
+            names = ["ml_prediction", "procedural_memory", "episodic_memory", "shadow_memory", "portfolio_state", "risk_state", "treasury"]
+            counts = [int(v or 0) for v in row[4:11]] if row else [0] * 7
+            rates = {name: round(count / max(1, total), 4) for name, count in zip(names, counts)}
+            most_ignored = min(rates, key=rates.get) if rates else "unknown"
+            return {
+                "total_audits": total,
+                "avg_memory_usage_score": round(float(row[1] or 0), 4),
+                "avg_context_size_chars": round(float(row[2] or 0), 1),
+                "avg_latency_ms": round(float(row[3] or 0), 1),
+                "most_ignored_dimension": most_ignored,
+                "dimension_usage_rates": rates,
+            }
+        except Exception:
+            log.exception("get_reasoning_audit_summary failed")
+            return {"total_audits": 0, "avg_memory_usage_score": 0.0, "avg_context_size_chars": 0.0, "avg_latency_ms": 0.0, "most_ignored_dimension": "unknown", "dimension_usage_rates": {}}
+
+    def save_reasoning_feedback(self, plan_id, reflection, missing_dimensions, recommended_improvements, severity="info") -> None:
+        now = datetime.now(tz=timezone.utc).isoformat()
+        with self._con() as con:
+            con.execute(
+                "INSERT INTO agent_reasoning_feedback (plan_id, reflection, missing_dimensions, recommended_improvements, severity, created_at) VALUES (?,?,?,?,?,?)",
+                (plan_id, reflection, missing_dimensions, recommended_improvements, severity, now),
+            )
 
 # ===================== Factory =====================
 def make_storage() -> AgentStorage:

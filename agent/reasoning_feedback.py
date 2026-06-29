@@ -77,12 +77,21 @@ class ReasoningFeedbackEngine:
         # Track by section
         sections = ["ml_prediction", "procedural_memory", "episodic_memory",
                      "shadow_memory", "portfolio_state", "risk_state", "treasury"]
+        audit_columns = {
+            "ml_prediction": "ml_used",
+            "procedural_memory": "procedural_used",
+            "episodic_memory": "episodic_used",
+            "shadow_memory": "shadow_used",
+            "portfolio_state": "portfolio_used",
+            "risk_state": "risk_used",
+            "treasury": "treasury_used",
+        }
         for s in sections:
             dimension_usage[s] = {"used": 0, "total": 0}
 
         for audit in audits:
             for s in sections:
-                if audit.get(f"{s}_used", False):
+                if audit.get(audit_columns[s], False):
                     dimension_usage[s]["used"] += 1
                 dimension_usage[s]["total"] += 1
 
@@ -217,8 +226,17 @@ class ReasoningFeedbackEngine:
                 ignored = []
                 dims = ["ml_prediction", "procedural_memory", "episodic_memory",
                         "shadow_memory", "portfolio_state", "risk_state", "treasury"]
+                audit_columns = {
+                    "ml_prediction": "ml_used",
+                    "procedural_memory": "procedural_used",
+                    "episodic_memory": "episodic_used",
+                    "shadow_memory": "shadow_used",
+                    "portfolio_state": "portfolio_used",
+                    "risk_state": "risk_used",
+                    "treasury": "treasury_used",
+                }
                 for d in dims:
-                    if not audit.get(f"{d}_used", False):
+                    if not audit.get(audit_columns[d], False):
                         decision = reasoning.get("plan_summary", "")
                         required = DECISION_REQUIRED_CONTEXT.get("HOLD", [])
                         for action in reasoning.get("proposed_actions", []):

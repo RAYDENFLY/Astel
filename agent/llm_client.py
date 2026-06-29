@@ -318,6 +318,9 @@ class LLMRouter:
         """
         raw_content: str = ""
         usage: Optional[TokenUsage] = None
+        self.last_raw_content = ""
+        self.last_latency_ms = 0.0
+        started_at = time.time()
 
         # 1. Coba Ollama lokal
         try:
@@ -352,16 +355,21 @@ class LLMRouter:
         # Jika tidak ada output sama sekali → safe default
         if not raw_content:
             log.error("All LLM providers failed — returning safe PAUSE plan")
+            self.last_latency_ms = (time.time() - started_at) * 1000
             return _safe_default_plan(snapshot), TokenUsage(provider="none", model="none")
 
         # Parse + validate
         try:
             plan = _parse_plan(raw_content, snapshot)
+            self.last_raw_content = raw_content
+            self.last_latency_ms = (time.time() - started_at) * 1000
             if usage:
                 return plan, usage
             return plan, TokenUsage(provider="ollama", model="unknown")
         except Exception as parse_err:
             log.error("Failed to parse LLM output: %s\nRaw: %.500s", parse_err, raw_content)
+            self.last_raw_content = raw_content
+            self.last_latency_ms = (time.time() - started_at) * 1000
             return _safe_default_plan(snapshot), TokenUsage(provider="parse_error", model="")
 
 

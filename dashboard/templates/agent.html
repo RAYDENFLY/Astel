@@ -174,7 +174,7 @@
       </section>
 
       <!-- Row 5: AI Evolution -->
-      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 fade-in" style="animation-delay:0.4s">
+      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 fade-in" style="animation-delay:0.4s">
         <!-- Memory Influence -->
         <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
           <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-scale-balanced mr-2 text-fuchsia-400"></i>Memory Influence</h2>
@@ -206,8 +206,14 @@
             <div class="text-xs text-slate-600 text-center py-4">Loading…</div>
           </div>
         </div>
+        <!-- AI Self Reflection -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h2 class="text-sm font-semibold mb-3 text-slate-300"><i class="fa-solid fa-brain mr-2 text-sky-400"></i>AI Self Reflection</h2>
+          <div id="ev_self_reflection" class="space-y-2 text-sm">
+            <div class="text-xs text-slate-600 text-center py-4">Loading</div>
+          </div>
+        </div>
       </section>
-
       <!-- Row 6: Recent Changes + Influence Activity -->
       <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in" style="animation-delay:0.5s">
         <!-- What Changed Recently -->
@@ -863,6 +869,23 @@
           `;
         } catch(e) { console.error("FAILED PANEL: ev_scorecard", e); panicEvPanels(); return; }
 
+        // AI Self Reflection
+        try {
+          const sr = d.self_reflection || {};
+          const el = document.getElementById("ev_self_reflection");
+          if (!el) throw new Error("DOM #ev_self_reflection not found");
+          const trendClass = sr.improvement_trend === 'IMPROVING' ? 'text-emerald-400' : sr.improvement_trend === 'DECLINING' ? 'text-rose-400' : 'text-slate-300';
+          el.innerHTML = `
+            <div class="flex justify-between"><span class="text-slate-400">Status</span><span class="font-mono text-emerald-400">${sr.status || 'READY'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Validator Calls</span><span class="font-mono">${sr.validator_calls || 0}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Feedback Generated</span><span class="font-mono text-sky-400">${sr.feedback_generated || 0}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Feedback Injected</span><span class="font-mono text-violet-400">${sr.feedback_injected || 0}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Avg Usage Score</span><span class="font-mono">${((sr.average_usage_score || 0) * 100).toFixed(0)}%</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Most Ignored</span><span class="font-mono text-xs">${sr.most_ignored_dimension || 'None'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Trend</span><span class="font-mono ${trendClass}">${sr.improvement_trend || 'STABLE'}</span></div>
+          `;
+        } catch(e) { console.error("FAILED PANEL: ev_self_reflection", e); panicEvPanels(); return; }
+
         // What Changed Recently
         try {
           console.log("[EV7] render changes");
@@ -1051,7 +1074,7 @@
       }
 
       function panicEvPanels() {
-        const ids = ["ev_influence","ev_patterns","ev_pairs","ev_scorecard","ev_changes","ev_trends","ev_pattern_chart","ev_memory_chart","ev_pair_chart","ev_leaderboard","ev_lifecycle","ev_age"];
+        const ids = ["ev_influence","ev_patterns","ev_pairs","ev_scorecard","ev_self_reflection","ev_changes","ev_trends","ev_pattern_chart","ev_memory_chart","ev_pair_chart","ev_leaderboard","ev_lifecycle","ev_age"];
         ids.forEach(id => {
           const el = document.getElementById(id);
           if (el) el.innerHTML = '<div class="text-xs text-rose-400">Error loading evolution</div>';

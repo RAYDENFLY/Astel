@@ -1,0 +1,59 @@
+"""
+Injects Phase 9.2/9.3 storage methods into PostgresAgentStorage.
+Run: python agent/_inject_storage_methods.py
+"""
+content = open("agent/storage.py", encoding="utf-8").read()
+
+methods = r"""
+    # Phase 9.2 — Reasoning audit
+    def save_reasoning_audit(self, plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars=0, latency_ms=0.0, raw_content_length=0) -> None:
+        with self._get_conn().cursor() as cur:
+            cur.execute("INSERT INTO agent_reasoning_audit (plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars, latency_ms, raw_content_length) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (plan_id, llm_provider, memory_usage_score, ml_used, procedural_used, episodic_used, shadow_used, portfolio_used, risk_used, treasury_used, reasoning_json, context_size_chars, latency_ms, raw_content_length))
+
+    def get_reasoning_audits(self, limit=20) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM agent_reasoning_audit ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception:
+            log.exception("get_reasoning_audits failed")
+            return []
+
+    def get_reasoning_audit_summary(self) -> Dict[str, Any]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT COUNT(*) as total, COALESCE(AVG(memory_usage_score),0) as avg_score, SUM(CASE WHEN ml_used=TRUE THEN 1 ELSE 0 END) as ml, SUM(CASE WHEN procedural_used=TRUE THEN 1 ELSE 0 END) as proc, SUM(CASE WHEN episodic_used=TRUE THEN 1 ELSE 0 END) as epi, SUM(CASE WHEN shadow_used=TRUE THEN 1 ELSE 0 END) as shad, SUM(CASE WHEN portfolio_used=TRUE THEN 1 ELSE 0 END) as port, SUM(CASE WHEN risk_used=TRUE THEN 1 ELSE 0 END) as risk, SUM(CASE WHEN treasury_used=TRUE THEN 1 ELSE 0 END) as treas FROM agent_reasoning_audit")
+                row = cur.fetchone()
+                total = int(row[0]) if row else 0
+                return {
+                    "total_audits": total,
+                    "avg_memory_usage_score": round(float(row[1] or 0), 2) if row else 0.0,
+                    "ml_usage_rate": round(int(row[2] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "procedural_usage_rate": round(int(row[3] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "episodic_usage_rate": round(int(row[4] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "shadow_usage_rate": round(int(row[5] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "portfolio_usage_rate": round(int(row[6] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "risk_usage_rate": round(int(row[7] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                    "treasury_usage_rate": round(int(row[8] or 0) / max(1, total), 2) if total > 0 else 0.0,
+                }
+        except Exception:
+            log.exception("get_reasoning_audit_summary failed")
+            return {"total_audits": 0, "avg_memory_usage_score": 0.0}
+
+    # Phase 9.3 — Reasoning feedback
+    def save_reasoning_feedback(self, plan_id, reflection, missing_dimensions, recommended_improvements, severity="info") -> None:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("INSERT INTO agent_reasoning_feedback (plan_id, reflection, missing_dimensions, recommended_improvements, severity) VALUES (%s,%s,%s,%s,%s)", (plan_id, reflection, missing_dimensions, recommended_improvements, severity))
+        except Exception:
+            log.exception("save_reasoning_feedback failed")
+"""
+
+# Insert before SQLiteAgentStorage class
+marker = "class SQLiteAgentStorage(AgentStorage):"
+content = content.replace(marker, methods + "\n" + marker)
+
+open("agent/storage.py", "w", encoding="utf-8").write(content)
+print("OK — PostgresAgentStorage methods injected")
