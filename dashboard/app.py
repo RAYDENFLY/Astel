@@ -217,18 +217,32 @@ def api_positions() -> Dict[str, Any]:
                 if c in sl_by_contract:
                     p["sl_price"] = sl_by_contract[c]
 
-                # Fallback: if exchange trigger orders aren't visible, use journal OPEN trade.
-                # This helps keep the dashboard informative even when Gate doesn't return
-                # open plan orders (or they weren't placed).
+                # Fallback: if exchange trigger orders aren't visible, use ExecutionEngine state.
                 if "tp_price" not in p or p.get("tp_price") is None or "sl_price" not in p or p.get("sl_price") is None:
                     try:
-                        open_by_asset = get_open_trades_by_asset(db_path)
-                        jt = open_by_asset.get(c)
-                        if jt:
-                            if p.get("tp_price") is None and jt.get("tp_price") is not None:
-                                p["tp_price"] = float(jt.get("tp_price"))
-                            if p.get("sl_price") is None and jt.get("stop_price") is not None:
-                                p["sl_price"] = float(jt.get("stop_price"))
+                        storage = _get_agent_storage()
+                        open_trades = [t for t in storage.get_trade_replay_summary(limit=100) if t.get("status") == "OPEN"]
+                        
+                        agent_tp = None
+                        agent_sl = None
+                        
+                        for ot in open_trades:
+                            if ot.get("contract") == c:
+                                events = storage.get_trade_replay_events(ot.get("trade_id"))
+                                for ev in reversed(events):
+                                    if ev.get("event_type") == "position_update":
+                                        data = json.loads(ev.get("metadata", ev.get("event_data", "{}")))
+                                        if broker_tp := data.get("tp_price"):
+                                            agent_tp = float(broker_tp)
+                                        if broker_sl := data.get("sl_price"):
+                                            agent_sl = float(broker_sl)
+                                        break
+                                break
+                                
+                        if p.get("tp_price") is None and agent_tp is not None:
+                            p["tp_price"] = agent_tp
+                        if p.get("sl_price") is None and agent_sl is not None:
+                            p["sl_price"] = agent_sl
                     except Exception:
                         pass
             open_only.append(p)
@@ -360,10 +374,171 @@ def api_weekly() -> Dict[str, Any]:
 
 @app.get("/api/trades")
 def api_trades() -> Dict[str, Any]:
+    """DEPRECATED — Legacy Journal trades table.
+    
+    Use /api/current-positions instead.
+    """
     cfg = _load_config()
     db_path = _db_path(cfg)
     trades = get_recent_trades(db_path, limit=50)
-    return {"trades": trades}
+    return {"trades": trades, "source": "legacy_journal", "warning": "deprecated — use /api/current-positions"}
+
+
+@app.get("/api/current-positions")
+def api_current_positions(limit: int = 50) -> Dict[str, Any]:
+    """Current open positions from the ExecutionEngine.
+
+    Single source of truth: agent_trade_replay_summary (status=OPEN)
+    enriched with live Gate.io exchange data (mark price, unrealized PnL).
+
+    This replaces the legacy 'Recent Trades (Journal)' panel.
+
+    Data sources (in priority order):
+      1. agent_trade_replay_summary — agent-side open trades registered by
+         the ExecutionEngine (contract, side, plan_id, llm_provider, status,
+         created_at, exchange_order_id via exchange_response event)
+      2. agent_trade_replay_events — per-trade event details including
+         entry fill price, TP/SL prices, execution mode
+      3. Gate.io live API — current mark price and unrealized PnL
+         (matched by contract name)
+
+    Response:
+      {
+        "positions": [
+          {
+            "time": str,            # created_at from replay summary
+            "contract": str,        # e.g. "BTC_USDT"
+            "side": str,            # "BUY" | "SELL"
+            "position_size": float, # filled_size from exchange_response event
+            "avg_fill_price": float, # avg_fill_price from exchange_response
+            "current_price": float,  # mark_price from Gate live API (or null)
+            "unrealized_pnl": float, # unrealised_pnl from Gate live API (or null)
+            "stop_loss": float,      # sl_price from position_update event (or null)
+            "take_profit": float,    # tp_price from position_update event (or null)
+            "exchange_order_id": str, # order ID from exchange_response event
+            "status": str,           # OPEN / FILLED / REJECTED
+            "execution_mode": str,   # TESTNET / LIVE from exchange_response
+            "plan_id": int,          # originating agent plan
+            "provider": str,         # LLM provider that made this decision
+          }
+        ],
+        "source": "agent_trade_replay_events",
+        "count": int
+      }
+    """
+    try:
+        storage = _get_agent_storage()
+
+        # 1. Get OPEN trades from replay summary
+        try:
+            all_summaries = storage.get_trade_replay_summary(limit=min(limit * 4, 400))
+        except Exception:
+            all_summaries = []
+
+        open_summaries = [t for t in all_summaries if str(t.get("status", "")).upper() == "OPEN"]
+        open_summaries = open_summaries[:limit]
+
+        # 2. Fetch live Gate.io positions for mark price + unrealized PnL enrichment
+        live_by_contract: Dict[str, Dict] = {}
+        try:
+            cfg = _load_config()
+            executor = _mk_executor(cfg)
+            live_positions = fetch_open_positions(executor)
+            for lp in live_positions:
+                c = str(lp.get("contract", ""))
+                if c:
+                    live_by_contract[c] = lp
+        except Exception:
+            pass  # Gate unavailable — degrade gracefully
+
+        # 3. Build enriched position rows
+        positions = []
+        for t in open_summaries:
+            trade_id = t.get("trade_id", "")
+            contract = str(t.get("contract", ""))
+
+            # Parse per-trade events for extra fields
+            try:
+                events = storage.get_trade_replay_events(trade_id)
+            except Exception:
+                events = []
+
+            # Index events
+            exchange_resp_data: Dict = {}
+            pos_update_data: Dict = {}
+            for ev in events:
+                etype = ev.get("event_type", "")
+                raw = ev.get("event_data") or ev.get("metadata") or "{}"
+                if isinstance(raw, str):
+                    import json as _j
+                    try:
+                        parsed = _j.loads(raw)
+                    except Exception:
+                        parsed = {}
+                elif isinstance(raw, dict):
+                    parsed = raw
+                else:
+                    parsed = {}
+
+                if etype == "exchange_response":
+                    exchange_resp_data = parsed
+                elif etype == "position_update":
+                    pos_update_data = parsed
+
+            # Fields from events
+            avg_fill_price = exchange_resp_data.get("avg_fill_price")
+            position_size = exchange_resp_data.get("filled_size")
+            exchange_order_id = exchange_resp_data.get("exchange_order_id", "")
+            execution_mode = str(exchange_resp_data.get("execution_mode", "TESTNET"))
+            tp_price = pos_update_data.get("tp_price")
+            sl_price = pos_update_data.get("sl_price")
+
+            # Enrich with live Gate.io data (matched by contract)
+            live = live_by_contract.get(contract, {})
+            current_price = live.get("mark_price") or live.get("mark")
+            unrealized_pnl = live.get("unrealised_pnl") or live.get("unrealized_pnl") or live.get("pnl")
+
+            # Fallback position_size from Gate live if not in events
+            if position_size is None and live:
+                size_raw = live.get("size")
+                if size_raw is not None:
+                    try:
+                        position_size = abs(float(size_raw))
+                    except Exception:
+                        pass
+
+            # Fallback TP/SL from live trigger orders when not in events
+            if (tp_price is None or sl_price is None) and contract in live_by_contract:
+                if tp_price is None:
+                    tp_price = live.get("tp_price")
+                if sl_price is None:
+                    sl_price = live.get("sl_price")
+
+            positions.append({
+                "time": str(t.get("created_at", "")),
+                "contract": contract,
+                "side": str(t.get("side", "")),
+                "position_size": float(position_size) if position_size is not None else None,
+                "avg_fill_price": float(avg_fill_price) if avg_fill_price is not None else None,
+                "current_price": float(current_price) if current_price is not None else None,
+                "unrealized_pnl": float(unrealized_pnl) if unrealized_pnl is not None else None,
+                "stop_loss": float(sl_price) if sl_price is not None else None,
+                "take_profit": float(tp_price) if tp_price is not None else None,
+                "exchange_order_id": str(exchange_order_id) if exchange_order_id else "",
+                "status": str(t.get("status", "OPEN")),
+                "execution_mode": execution_mode,
+                "plan_id": int(t.get("plan_id", 0)),
+                "provider": str(t.get("llm_provider", "")),
+                "trade_id": trade_id,
+            })
+
+        return {
+            "positions": positions,
+            "source": "agent_trade_replay_events",
+            "count": len(positions),
+        }
+    except Exception as e:
+        return {"positions": [], "source": "agent_trade_replay_events", "error": str(e), "count": 0}
 
 
 @app.get("/api/closures")
@@ -1585,6 +1760,60 @@ def api_agent_shadow(limit: int = 20, status: str = None, agreement: str = None)
         return {"observations": observations, "metrics": metrics}
     except Exception as e:
         return {"observations": [], "metrics": {}, "error": str(e)}
+
+
+@app.get("/api/agent/pipeline/latest")
+def api_agent_pipeline_latest() -> Dict[str, Any]:
+    """Return the most recent decision pipeline trace.
+    
+    Shows every stage of the last agent tick:
+      - market_snapshot, analyst_team, consensus, ml_prediction,
+        memory_context, llm_reasoning, agent_plan, guardrails,
+        risk_validation, execution_engine, exchange_response
+    
+    Each stage shows:
+      - status (SUCCESS/FAILED/SKIPPED/BLOCKED)
+      - duration_ms
+      - human-readable reason
+      - stage-specific data
+    
+    If execution stopped, stopped_at_stage identifies exactly where.
+    """
+    try:
+        # Load from the tracer singleton in memory
+        from agent.pipeline_trace import DecisionPipelineTracer
+        tracer = _get_pipeline_tracer()
+        trace = tracer.get_latest()
+        if trace:
+            return trace.to_dict()
+        return {"tick_number": 0, "stages": [], "final_status": "NO_DATA", "timestamp": ""}
+    except Exception as e:
+        return {"error": str(e), "stages": [], "final_status": "ERROR"}
+
+
+@app.get("/api/agent/pipeline/history")
+def api_agent_pipeline_history(limit: int = 20) -> Dict[str, Any]:
+    """Return recent decision pipeline traces."""
+    try:
+        from agent.pipeline_trace import DecisionPipelineTracer
+        tracer = _get_pipeline_tracer()
+        history = tracer.get_history(limit=min(limit, 100))
+        return {"traces": [t.to_dict() for t in history]}
+    except Exception as e:
+        return {"traces": [], "error": str(e)}
+
+
+# Global tracer singleton
+_pipeline_tracer = None
+
+
+def _get_pipeline_tracer():
+    """Lazy-init global pipeline tracer."""
+    global _pipeline_tracer
+    if _pipeline_tracer is None:
+        from agent.pipeline_trace import DecisionPipelineTracer
+        _pipeline_tracer = DecisionPipelineTracer(_get_agent_storage())
+    return _pipeline_tracer
 
 
 @app.get("/api/agent/experiment")

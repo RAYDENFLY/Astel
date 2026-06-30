@@ -310,30 +310,67 @@ x<!doctype html>
       <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold">
-            <i class="fa-solid fa-receipt mr-2 text-cyan-400"></i>
-            Recent Trades (Journal)
+            <i class="fa-solid fa-bolt mr-2 text-cyan-400"></i>
+            Current Positions
           </h2>
-          <div class="text-xs text-slate-400" id="trades_count">—</div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400" id="cur_pos_count">—</span>
+          </div>
+        </div>
+        <!-- Filters -->
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+          <input id="cur_pos_filter_contract" type="text" placeholder="Filter contract..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32" oninput="applyCurPosFilters()" />
+          <select id="cur_pos_filter_side" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyCurPosFilters()">
+            <option value="">All sides</option>
+            <option value="BUY">BUY</option>
+            <option value="SELL">SELL</option>
+          </select>
+          <select id="cur_pos_filter_mode" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyCurPosFilters()">
+            <option value="">All modes</option>
+            <option value="TESTNET">TESTNET</option>
+            <option value="LIVE">LIVE</option>
+          </select>
+          <span class="text-xs text-slate-500" id="cur_pos_showing">—</span>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full text-sm">
             <thead class="text-slate-300">
               <tr class="border-b border-slate-800">
                 <th class="text-left py-2 pr-4">Time</th>
-                <th class="text-left py-2 px-4">Asset</th>
+                <th class="text-left py-2 px-4">Contract</th>
                 <th class="text-left py-2 px-4">Side</th>
-                <th class="text-right py-2 px-4">Qty</th>
-                <th class="text-right py-2 px-4">Entry</th>
-                <th class="text-right py-2 px-4">Entry Fee</th>
-                <th class="text-right py-2 px-4">SL</th>
-                <th class="text-right py-2 pl-4">TP</th>
-                <th class="text-left py-2 pl-4">TP/SL Order</th>
+                <th class="text-right py-2 px-4">Size</th>
+                <th class="text-right py-2 px-4">Avg Fill</th>
+                <th class="text-right py-2 px-4">Current Price</th>
+                <th class="text-right py-2 px-4">Unrealized PnL</th>
+                <th class="text-right py-2 px-4">Stop Loss</th>
+                <th class="text-right py-2 px-4">Take Profit</th>
+                <th class="text-left py-2 px-4">Exchange Order ID</th>
+                <th class="text-left py-2 px-4">Status</th>
+                <th class="text-left py-2 pl-4">Mode</th>
               </tr>
             </thead>
-            <tbody id="trades_tbody" class="font-mono text-slate-100"></tbody>
+            <tbody id="cur_pos_tbody" class="font-mono text-slate-100"></tbody>
           </table>
         </div>
-        <div class="text-xs text-slate-500 mt-2">TP shown is currently a simple 1R target (for visibility).</div>
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500">Rows:</span>
+            <select id="cur_pos_page_size" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="updateCurPosPageSize()">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-1">
+            <button id="cur_pos_prev" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeCurPosPage(-1)">← Prev</button>
+            <span id="cur_pos_page_info" class="text-xs text-slate-400 px-2">Page 1</span>
+            <button id="cur_pos_next" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeCurPosPage(1)">Next →</button>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 mt-2">Source: <span class="font-mono">agent_trade_replay_events</span> (ExecutionEngine) + Gate.io live mark price.</div>
       </section>
 
       <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
@@ -403,7 +440,7 @@ x<!doctype html>
       </section>
 
       <footer class="text-xs text-slate-500 py-2">
-        Data sources: Gate.io futures (read-only) + SQLite tables (equity_curve, weekly_performance).
+        Data sources: Gate.io futures (read-only) · agent_trade_replay_events (ExecutionEngine) · SQLite tables (equity_curve, weekly_performance).
       </footer>
     </div>
 
@@ -1058,65 +1095,183 @@ x<!doctype html>
         }
       }
 
-      async function loadTrades() {
-        const r = await fetch("/api/trades");
-        if (!r.ok) throw new Error("/api/trades failed");
-        const d = await r.json();
-        const trades = d.trades || [];
+      // ── Current Positions pagination state ──
+      let _allCurPos = [];
+      let _curPosPage = 0;
+      let _curPosPageSize = 5;
 
-        document.getElementById("trades_count").textContent = trades.length + " rows";
+      function renderCurPosPage() {
+        const filterContract = (document.getElementById("cur_pos_filter_contract")?.value || "").toLowerCase().trim();
+        const filterSide = document.getElementById("cur_pos_filter_side")?.value || "";
+        const filterMode = document.getElementById("cur_pos_filter_mode")?.value || "";
 
-        const tbody = document.getElementById("trades_tbody");
+        let filtered = _allCurPos;
+        if (filterContract) {
+          filtered = filtered.filter(p => (p.contract || "").toLowerCase().includes(filterContract));
+        }
+        if (filterSide) {
+          filtered = filtered.filter(p => (p.side || "").toUpperCase() === filterSide);
+        }
+        if (filterMode) {
+          filtered = filtered.filter(p => (p.execution_mode || "").toUpperCase() === filterMode);
+        }
+
+        const totalPages = Math.max(1, Math.ceil(filtered.length / _curPosPageSize));
+        _curPosPage = Math.min(_curPosPage, totalPages - 1);
+        if (_curPosPage < 0) _curPosPage = 0;
+
+        const start = _curPosPage * _curPosPageSize;
+        const end = Math.min(start + _curPosPageSize, filtered.length);
+        const pageRows = filtered.slice(start, end);
+
+        const tbody = document.getElementById("cur_pos_tbody");
         tbody.innerHTML = "";
 
-        for (const t of trades) {
+        if (pageRows.length === 0) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 12;
+          td.className = "text-center py-6 text-slate-500 text-xs";
+          td.textContent = filtered.length === 0 && _allCurPos.length === 0
+            ? "No open positions in ExecutionEngine."
+            : "No matches for current filters.";
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+
+        for (const p of pageRows) {
           const tr = document.createElement("tr");
           tr.className = "border-b border-slate-800/60";
 
-          const ts = t.timestamp ?? "—";
-          const asset = t.asset ?? "—";
-          const side = t.side ?? "—";
-          const qty = t.qty ?? "—";
-          const entry = t.entry_price ?? null;
-          const entryFee = t.entry_fee ?? null;
-          const sl = t.stop_price ?? null;
-          const tp = t.tp_price ?? null;
-          const tpOid = t.tp_order_id ?? null;
-          const slOid = t.sl_order_id ?? null;
+          const ts = p.time ?? "—";
+          const contract = p.contract ?? "—";
+          const side = p.side ?? "—";
+          const size = p.position_size;
+          const avgFill = p.avg_fill_price;
+          const curPx = p.current_price;
+          const upnl = p.unrealized_pnl;
+          const sl = p.stop_loss;
+          const tp = p.take_profit;
+          const oid = p.exchange_order_id;
+          const status = p.status ?? "—";
+          const mode = p.execution_mode ?? "—";
 
+          // Time
           const tdTime = document.createElement("td");
-          tdTime.className = "text-left py-2 pr-4 whitespace-nowrap font-sans";
-          // keep it readable without heavy parsing
-          tdTime.textContent = String(ts).replace("T", " ").replace("+00:00", "Z");
+          tdTime.className = "text-left py-2 pr-4 whitespace-nowrap font-sans text-xs";
+          tdTime.textContent = String(ts).replace("T", " ").replace("+00:00", "Z").slice(0, 19);
           tr.appendChild(tdTime);
 
-          const tdAsset = document.createElement("td");
-          tdAsset.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
-          tdAsset.textContent = asset;
-          tr.appendChild(tdAsset);
+          // Contract
+          const tdContract = document.createElement("td");
+          tdContract.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+          tdContract.textContent = contract;
+          tr.appendChild(tdContract);
 
+          // Side badge
           const tdSide = document.createElement("td");
           tdSide.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
-          tdSide.textContent = side;
+          const sideBadge = document.createElement("span");
+          const sideUp = String(side).toUpperCase();
+          sideBadge.className = "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold " +
+            (sideUp === "BUY" || sideUp === "LONG"
+              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+              : sideUp === "SELL" || sideUp === "SHORT"
+              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+              : "bg-slate-700/30 text-slate-300 border border-slate-600/30");
+          sideBadge.textContent = side;
+          tdSide.appendChild(sideBadge);
           tr.appendChild(tdSide);
 
-          tr.appendChild(posCell(String(qty)));
-          tr.appendChild(posCell(entry === null ? "—" : fmtUsd(entry)));
-          tr.appendChild(posCell(entryFee === null ? "—" : fmtUsd(entryFee)));
-          tr.appendChild(posCell(sl === null ? "—" : fmtUsd(sl)));
-          tr.appendChild(posCell(tp === null ? "—" : fmtUsd(tp)));
+          tr.appendChild(posCell(size === null || size === undefined ? "—" : fmtUsd(size)));
+          tr.appendChild(posCell(avgFill === null || avgFill === undefined ? "—" : fmtPx(avgFill)));
+          tr.appendChild(posCell(curPx === null || curPx === undefined ? "—" : fmtPx(curPx)));
 
-          const tdOids = document.createElement("td");
-          tdOids.className = "text-left py-2 pl-4 whitespace-nowrap font-mono text-xs text-slate-300";
-          // Keep it short but useful.
-          const parts = [];
-          if (tpOid) parts.push("TP:" + String(tpOid));
-          if (slOid) parts.push("SL:" + String(slOid));
-          tdOids.textContent = parts.length ? parts.join(" ") : "—";
-          tr.appendChild(tdOids);
+          // Unrealized PnL (colored)
+          const upnlTd = posCell(upnl === null || upnl === undefined ? "—" : fmtUsd(upnl));
+          const upnlNum = Number(upnl);
+          if (!Number.isNaN(upnlNum) && upnl !== null && upnl !== undefined) {
+            upnlTd.className += upnlNum >= 0 ? " text-emerald-400" : " text-rose-400";
+          }
+          tr.appendChild(upnlTd);
+
+          tr.appendChild(posCell(sl === null || sl === undefined ? "—" : fmtPx(sl)));
+          tr.appendChild(posCell(tp === null || tp === undefined ? "—" : fmtPx(tp)));
+
+          // Exchange Order ID (truncated)
+          const tdOid = document.createElement("td");
+          tdOid.className = "text-left py-2 px-4 whitespace-nowrap font-mono text-xs text-slate-300";
+          tdOid.textContent = oid ? String(oid).slice(0, 16) + (String(oid).length > 16 ? "…" : "") : "—";
+          tdOid.title = oid ? String(oid) : "";
+          tr.appendChild(tdOid);
+
+          // Status badge
+          const tdStatus = document.createElement("td");
+          tdStatus.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
+          const statusBadge = document.createElement("span");
+          const statusUp = String(status).toUpperCase();
+          statusBadge.className = "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold " +
+            (statusUp === "OPEN"
+              ? "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+              : statusUp === "FILLED"
+              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+              : "bg-slate-700/30 text-slate-300 border border-slate-600/30");
+          statusBadge.textContent = status;
+          tdStatus.appendChild(statusBadge);
+          tr.appendChild(tdStatus);
+
+          // Execution Mode badge
+          const tdMode = document.createElement("td");
+          tdMode.className = "text-left py-2 pl-4 whitespace-nowrap font-sans";
+          const modeBadge = document.createElement("span");
+          const modeUp = String(mode).toUpperCase();
+          modeBadge.className = "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold " +
+            (modeUp === "TESTNET"
+              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+              : modeUp === "LIVE"
+              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+              : "bg-slate-700/30 text-slate-300 border border-slate-600/30");
+          modeBadge.textContent = mode;
+          tdMode.appendChild(modeBadge);
+          tr.appendChild(tdMode);
 
           tbody.appendChild(tr);
         }
+
+        // Update counts and pagination
+        document.getElementById("cur_pos_count").textContent = filtered.length + " row" + (filtered.length !== 1 ? "s" : "");
+        document.getElementById("cur_pos_showing").textContent = filtered.length > 0
+          ? `Showing ${start + 1}–${end} of ${filtered.length}`
+          : "No matches";
+        document.getElementById("cur_pos_page_info").textContent = `Page ${_curPosPage + 1} of ${totalPages}`;
+        document.getElementById("cur_pos_prev").disabled = _curPosPage <= 0;
+        document.getElementById("cur_pos_next").disabled = _curPosPage >= totalPages - 1;
+      }
+
+      function applyCurPosFilters() {
+        _curPosPage = 0;
+        renderCurPosPage();
+      }
+
+      function changeCurPosPage(delta) {
+        _curPosPage += delta;
+        renderCurPosPage();
+      }
+
+      function updateCurPosPageSize() {
+        const sel = document.getElementById("cur_pos_page_size");
+        _curPosPageSize = parseInt(sel.value) || 5;
+        _curPosPage = 0;
+        renderCurPosPage();
+      }
+
+      async function loadCurrentPositions() {
+        const r = await fetch("/api/current-positions");
+        if (!r.ok) throw new Error("/api/current-positions failed");
+        const d = await r.json();
+        _allCurPos = d.positions || [];
+        _curPosPage = 0;
+        renderCurPosPage();
       }
 
       // ── Closures pagination state ──
@@ -1254,7 +1409,7 @@ x<!doctype html>
             loadPositions(),
             loadWeekly(),
             loadStats(),
-            loadTrades(),
+            loadCurrentPositions(),
             loadClosures(),
           ]);
           setStatus("Updated " + new Date().toLocaleTimeString());

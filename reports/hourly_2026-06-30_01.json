@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-06-30T01:40:09.478374+00:00",
+  "hour": 1,
+  "agent": {
+    "plans_total": 3,
+    "plans_delta_1h": 0,
+    "actions_total": 3,
+    "actions_delta_1h": 0
+  },
+  "llm": {
+    "audits_total": 0,
+    "audits_delta_1h": 0
+  },
+  "memory": {
+    "episodes_total": 0,
+    "episodes_delta_1h": 0,
+    "patterns_total": 0,
+    "patterns_delta_1h": 0
+  },
+  "replay": {
+    "trades_total": 0,
+    "trades_delta_1h": 0
+  },
+  "health": "HEALTHY"
+}
