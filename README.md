@@ -1,3 +1,5 @@
+![Astel](https://github.com/RAYDENFLY/Astel/blob/main/assets/logo/astel-logo.png)
+
 # Astel Research - TradingAgents
 
 **Autonomous AI-Powered Cryptocurrency Futures Trading System**
@@ -109,6 +111,7 @@ Supports SIMULATION, TESTNET, and LIVE modes with identical code paths.
 ### GateExecutor
 
 Direct Gate.io Futures API client supporting:
+
 - Market orders (BUY/SELL)
 - Limit orders
 - TP/SL trigger orders (reduce-only)
@@ -120,6 +123,7 @@ Direct Gate.io Futures API client supporting:
 ### MemoryContextBuilder
 
 **Phase 9.1** — Builds rich context for LLM reasoning by aggregating:
+
 - Current market snapshot
 - Survival mode and treasury state
 - Procedural memory rules
@@ -130,6 +134,7 @@ Direct Gate.io Futures API client supporting:
 ### ReasoningValidator
 
 **Phase 9.2** — Audits every LLM plan for:
+
 - Memory usage score (did the LLM consider memory?)
 - Context size and latency
 - Which memory dimensions were used (procedural, episodic, shadow, ML, portfolio, risk, treasury)
@@ -295,6 +300,7 @@ Gate.io Futures Testnet / Live
 ```
 
 `live_runner.py` is a lightweight launcher that:
+
 - Loads environment configuration
 - Initializes logging
 - Starts AutonomousAgent
@@ -303,6 +309,7 @@ Gate.io Futures Testnet / Live
 It does **not** instantiate `GateExecutor`, submit orders, manage positions, or set TP/SL. Those responsibilities belong exclusively to `AutonomousAgent`.
 
 This architecture was chosen to prevent:
+
 - Duplicate order submission
 - TP/SL flapping between competing systems
 - Inconsistent position management
@@ -424,6 +431,7 @@ pip install -r requirements.txt
 ```
 
 Key dependencies:
+
 - `pydantic` — Data validation
 - `psycopg2-binary` — PostgreSQL driver
 - `fastapi` — Dashboard server
