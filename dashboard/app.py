@@ -13,8 +13,9 @@ Notes:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import os
 
@@ -367,10 +368,41 @@ def api_trades() -> Dict[str, Any]:
 
 @app.get("/api/closures")
 def api_closures() -> Dict[str, Any]:
+    """
+    DEPRECATED — Use /api/replay/closures instead.
+    
+    Returns legacy trade_closures data. Values may be estimates from
+    CSV close prices rather than real exchange fills.
+    """
     cfg = _load_config()
     db_path = _db_path(cfg)
     rows = get_recent_closures(db_path, limit=50)
-    return {"closures": rows}
+    return {"closures": rows, "source": "legacy_trade_closures", "warning": "deprecated"}
+
+
+@app.get("/api/replay/closures")
+def api_replay_closures(limit: int = 50) -> Dict[str, Any]:
+    """
+    Return completed trades from agent_trade_replay_events.
+    
+    Contains real exchange data from ExecutionEngine responses:
+      - entry_price: avg_fill_price from exchange response
+      - exit_price: exit_price from position_closed event
+      - realized_pnl: real PnL from pnl_realized event
+      - fees: real fees from exchange response
+      - latency_ms: real execution latency
+      - exit_reason: reason for closure (TP_HIT, manual, etc.)
+      - exchange_order_id: real Gate.io order ID
+    
+    This replaces the legacy trade_closures table.
+    """
+    try:
+        from agent.daily_report import get_closures_from_replay
+        storage = _get_agent_storage()
+        rows = get_closures_from_replay(storage, limit=min(limit, 200))
+        return {"closures": rows, "source": "agent_trade_replay_events"}
+    except Exception as e:
+        return {"closures": [], "source": "agent_trade_replay_events", "error": str(e)}
 
 
 @app.get("/api/stats")

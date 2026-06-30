@@ -3,6 +3,7 @@
 Contract:
 - Uses GateExecutor for live exchange reads (equity, positions).
 - Uses SQLite for historical/derived reads (peak equity, weekly stats).
+- Uses AgentStorage for replay-based trade closures.
 - No exchange write calls.
 
 All functions here are side-effect free aside from network/DB reads.
@@ -10,6 +11,7 @@ All functions here are side-effect free aside from network/DB reads.
 
 from __future__ import annotations
 
+import json
 import math
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
