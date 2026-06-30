@@ -1,4 +1,8 @@
-![Astel](https://github.com/RAYDENFLY/Astel/blob/main/assets/logo/astel-text.png)
+<p align="center">
+  <a href="https://github.com/RAYDENFLY/Astel">
+    <img src="https://github.com/RAYDENFLY/Astel/blob/main/assets/logo/astel-text.png" alt="Astel" width="500">
+  </a>
+</p>
 
 # Astel Research - TradingAgents
 
