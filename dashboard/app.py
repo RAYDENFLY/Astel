@@ -786,6 +786,149 @@ def api_agent_actions(limit: int = 20) -> Dict[str, Any]:
         return {"actions": [], "error": str(e)}
 
 
+@app.get("/api/agent/market-intelligence")
+def api_agent_market_intelligence() -> Dict[str, Any]:
+    """Expose latest Phase 12.1 Market Intelligence analysis for dashboard observability."""
+    try:
+        storage = _get_agent_storage()
+        plans = storage.get_recent_plans(limit=1)
+        if not plans:
+            # Fallback: create fresh scan if no historical plans in DB
+            from agent.market_scanner import MarketScanner
+            scanner = MarketScanner()
+            results = scanner.scan_all_assets(limit_candles=50)
+            return {"market_intelligence": [r.model_dump(mode="json") for r in results], "source": "live_scanner"}
+
+        last_plan = plans[0]
+        input_snap = last_plan.get("input_snapshot") or {}
+        if isinstance(input_snap, str):
+            import json
+            try:
+                input_snap = json.loads(input_snap)
+            except Exception:
+                input_snap = {}
+
+        market_analysis = input_snap.get("market_analysis", [])
+        return {"market_intelligence": market_analysis, "source": "storage_snapshot", "ts": last_plan.get("ts")}
+    except Exception as e:
+        return {"market_intelligence": [], "error": str(e)}
+
+
+@app.get("/api/agent/decision-proposals")
+def api_agent_decision_proposals(limit: int = 20) -> Dict[str, Any]:
+    """Expose latest Phase 12.2 Decision Proposals & Specialist Analyses for dashboard observability."""
+    try:
+        storage = _get_agent_storage()
+        proposals = storage.get_recent_decision_proposals(limit=min(limit, 50))
+        if not proposals:
+            # Live scanner evaluation fallback
+            from agent.market_scanner import MarketScanner
+            scanner = MarketScanner(storage=storage)
+            results = scanner.scan_all_assets(limit_candles=50)
+            props, revs = scanner.evaluate_decisions(results)
+            return {"decision_proposals": [p.model_dump(mode="json") for p in props], "source": "live_scanner"}
+        return {"decision_proposals": proposals, "source": "storage"}
+    except Exception as e:
+        return {"decision_proposals": [], "error": str(e)}
+
+
+@app.get("/api/agent/risk-reviews")
+def api_agent_risk_reviews(limit: int = 20) -> Dict[str, Any]:
+    """Expose latest Phase 12.2 Risk Supervisor Reviews for dashboard observability."""
+    try:
+        storage = _get_agent_storage()
+        reviews = storage.get_recent_risk_supervisor_reviews(limit=min(limit, 50))
+        return {"risk_reviews": reviews, "source": "storage"}
+    except Exception as e:
+        return {"risk_reviews": [], "error": str(e)}
+
+
+# ── Phase 12.3 — Shadow Trading & Calibration Dashboard Endpoints ──
+
+@app.get("/api/agent/shadow/latest")
+def api_agent_shadow_latest(limit: int = 20) -> Dict[str, Any]:
+    """Expose active open shadow trades (SIMULATION / READ-ONLY)."""
+    try:
+        storage = _get_agent_storage()
+        open_trades = storage.get_recent_shadow_trades(limit=min(limit, 50), outcome="OPEN")
+        return {"shadow_trades": open_trades, "execution_mode": "SHADOW", "source": "storage"}
+    except Exception as e:
+        return {"shadow_trades": [], "execution_mode": "SHADOW", "error": str(e)}
+
+
+@app.get("/api/agent/shadow/history")
+def api_agent_shadow_history(limit: int = 50) -> Dict[str, Any]:
+    """Expose historical shadow trade records (SIMULATION / READ-ONLY)."""
+    try:
+        storage = _get_agent_storage()
+        history = storage.get_recent_shadow_trades(limit=min(limit, 100))
+        return {"shadow_history": history, "execution_mode": "SHADOW", "source": "storage"}
+    except Exception as e:
+        return {"shadow_history": [], "execution_mode": "SHADOW", "error": str(e)}
+
+
+@app.get("/api/agent/shadow/performance")
+def api_agent_shadow_performance() -> Dict[str, Any]:
+    """Expose aggregate performance metrics of shadow trading (SIMULATION / READ-ONLY)."""
+    try:
+        storage = _get_agent_storage()
+        trades = storage.get_recent_shadow_trades(limit=200)
+        completed = [t for t in trades if t.get("outcome") in ("WIN", "LOSS", "CLOSED")]
+
+        if not completed:
+            return {
+                "execution_mode": "SHADOW",
+                "total_trades": len(trades),
+                "completed_trades": 0,
+                "win_rate": 0.0,
+                "avg_return": 0.0,
+                "cum_return": 0.0,
+                "status": "NO_COMPLETED_TRADES",
+            }
+
+        wins = sum(1 for t in completed if t.get("outcome") == "WIN")
+        win_rate = wins / len(completed)
+        returns = [float(t.get("final_return", 0.0)) for t in completed]
+        avg_return = sum(returns) / len(returns)
+        cum_return = sum(returns)
+
+        return {
+            "execution_mode": "SHADOW",
+            "total_trades": len(trades),
+            "completed_trades": len(completed),
+            "win_rate": round(win_rate, 4),
+            "avg_return": round(avg_return, 6),
+            "cum_return": round(cum_return, 6),
+            "status": "ACTIVE_SHADOW",
+        }
+    except Exception as e:
+        return {"execution_mode": "SHADOW", "error": str(e)}
+
+
+@app.get("/api/agent/calibration/summary")
+def api_agent_calibration_summary() -> Dict[str, Any]:
+    """Expose latest Decision Calibration report for dashboard observability."""
+    try:
+        storage = _get_agent_storage()
+        report_item = storage.get_latest_calibration_report()
+        if report_item:
+            return {"calibration_report": report_item.get("report", report_item), "source": "storage"}
+        
+        # If no stored report exists, compute on-the-fly from historical replay
+        from agent.historical_replay import HistoricalReplayEngine
+        from agent.calibration import DecisionCalibrationEngine
+        replay = HistoricalReplayEngine()
+        outcomes, _ = replay.run_replay()
+        cal_engine = DecisionCalibrationEngine()
+        report = cal_engine.analyze(outcomes)
+        report_dict = report.model_dump(mode="json")
+        storage.save_calibration_report(report_dict)
+        return {"calibration_report": report_dict, "source": "computed_replay"}
+    except Exception as e:
+        return {"calibration_report": None, "error": str(e)}
+
+
+
 @app.get("/api/agent/analysts")
 def api_agent_analysts(limit: int = 10) -> Dict[str, Any]:
     """Return recent analyst reports.

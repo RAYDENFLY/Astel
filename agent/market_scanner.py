@@ -15,7 +15,7 @@ import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -25,14 +25,19 @@ from quant_system.data.gate_data import GateDataFetcher
 from quant_system.execution.gate_executor import GateExecutor
 from quant_system.features.build_features import FeatureBuilder
 from quant_system.model.model_utils import FEATURE_COLUMNS, load_pickle, load_threshold
-from agent.schema import AssetAnalysis, AgentSnapshot, AccountSnapshot, SurvivalMode, AgentMode
+from agent.market_intelligence import MarketIntelligence
+from agent.schema import AssetAnalysis, AgentSnapshot, AccountSnapshot, SurvivalMode, AgentMode, DecisionProposal, RiskSupervisorReview
+from agent.decision_agent import DecisionAgent
+from agent.risk_supervisor import RiskSupervisor
+from agent.decision_provenance import DecisionProvenanceManager
 
 log = logging.getLogger("agent.market_scanner")
 
 
 class MarketScanner:
     """
-    MarketScanner integrates the offline quant pipeline with the live agent runtime.
+    MarketScanner integrates the offline quant pipeline, Phase 12.1 Market Intelligence Layer,
+    and Phase 12.2 Multi-Agent Market Decision & Evidence Fusion Layer with the live agent runtime.
     """
 
     def __init__(
@@ -40,6 +45,8 @@ class MarketScanner:
         cfg: Optional[Dict[str, Any]] = None,
         config_path: Optional[Path] = None,
         models_dir: Optional[Path] = None,
+        storage: Optional[Any] = None,
+        llm_router: Optional[Any] = None,
     ) -> None:
         if cfg is None:
             if config_path is None:
@@ -59,6 +66,10 @@ class MarketScanner:
 
         self.models_dir = models_dir
         self._feature_builder = FeatureBuilder(self.cfg)
+        self._intelligence = MarketIntelligence(cfg_dict=self.cfg)
+        self.decision_agent = DecisionAgent(cfg_dict=self.cfg, llm_router=llm_router)
+        self.risk_supervisor = RiskSupervisor()
+        self.provenance_manager = DecisionProvenanceManager(storage=storage)
 
         # Gate executor setup (public REST endpoints require no secrets)
         gate_cfg = self.cfg.get("gate") or {}
@@ -100,8 +111,8 @@ class MarketScanner:
 
     def scan_all_assets(self, limit_candles: int = 150) -> List[AssetAnalysis]:
         """
-        Scan every configured asset using live OHLCV from Gate.io.
-        Returns list of AssetAnalysis ordered by rank.
+        Scan every configured asset using live OHLCV from Gate.io, compute ML predictions,
+        and enrich with Market Intelligence evidence. Returns list of AssetAnalysis ordered by rank.
         """
         log.info("MarketScanner: starting scan for %d assets...", len(self.assets))
         results: List[AssetAnalysis] = []
@@ -131,11 +142,11 @@ class MarketScanner:
             log.warning("MarketScanner: feature dataframe is empty")
             return results
 
-        # Process latest feature bar for each asset
+        # First pass: compute technicals + ML prediction for all assets
+        raw_analyses: Dict[str, AssetAnalysis] = {}
         for asset in self.assets:
             asset_rows = feats_df[feats_df["asset"] == asset]
             if asset_rows.empty:
-                # Retry search by alt name (e.g. BTCUSDT)
                 alt = asset.replace("_", "")
                 asset_rows = feats_df[feats_df["asset"] == alt]
 
@@ -143,24 +154,74 @@ class MarketScanner:
                 log.warning("MarketScanner: no feature rows found for asset %s", asset)
                 continue
 
-            # Pick the latest bar
             latest_bar = asset_rows.sort_values("timestamp").iloc[-1]
-            analysis = self._analyze_asset_bar(asset, latest_bar)
+            raw_analyses[asset] = self._analyze_asset_bar(asset, latest_bar)
+
+        # Extract BTC bar info as macro reference for altcoins
+        btc_analysis = raw_analyses.get("BTC_USDT")
+        btc_bar_info = btc_analysis.model_dump() if btc_analysis else None
+
+        # Second pass: enrich with Phase 12.1 Market Intelligence evidence
+        for asset, analysis in raw_analyses.items():
+            try:
+                evidences, summary = self._intelligence.analyze_asset_intelligence(
+                    asset=asset,
+                    tech_signal=analysis.ema_trend,
+                    tech_score=analysis.momentum,
+                    ml_signal=analysis.direction,
+                    ml_score=analysis.prediction,
+                    ml_confidence=analysis.confidence,
+                    price_change_1h=analysis.momentum,
+                    btc_bar_info=btc_bar_info,
+                )
+                analysis.market_evidence = evidences
+                analysis.evidence_summary = summary
+                analysis.agreement_score = summary.agreement
+                analysis.contradiction_level = summary.contradiction_level
+                analysis.evidence_quality = summary.evidence_quality
+                analysis.data_freshness_sec = summary.evidence_quality
+            except Exception as intel_err:
+                log.warning("MarketIntelligence enrichment error for %s: %s", asset, intel_err)
+
             results.append(analysis)
 
-        # Rank assets by signal strength (composite of abs(prediction), probability, confidence)
-        results.sort(key=lambda a: (abs(a.prediction) * a.confidence * a.probability), reverse=True)
+        # Rank assets by composite evidence strength and probability
+        def _rank_key(a: AssetAnalysis) -> float:
+            summary_score = a.evidence_summary.weighted_score if a.evidence_summary else a.prediction
+            return summary_score * a.confidence * a.probability
+
+        results.sort(key=_rank_key, reverse=True)
 
         for i, res in enumerate(results, start=1):
             res.rank = i
 
         log.info(
-            "MarketScanner: scan complete. Analyzed %d/%d assets. Top 3: %s",
+            "MarketScanner: scan complete. Analyzed %d/%d assets with Market Intelligence. Top 3: %s",
             len(results), len(self.assets),
-            [f"{a.asset}({a.direction}, prob={a.probability:.0%})" for a in results[:3]]
+            [f"{a.asset}({a.direction}, prob={a.probability:.0%}, agreement={a.agreement_score:.2f})" for a in results[:3]]
         )
 
         return results
+
+    def evaluate_decisions(
+        self,
+        scanned_results: List[AssetAnalysis],
+        snapshot: Optional[AgentSnapshot] = None,
+    ) -> Tuple[List[DecisionProposal], List[RiskSupervisorReview]]:
+        """
+        Synthesizes decision proposals for top candidates using DecisionAgent and passes proposals
+        through RiskSupervisor review without executing trades.
+        """
+        proposals = self.decision_agent.evaluate_scanned_assets(scanned_results)
+        reviews: List[RiskSupervisorReview] = []
+
+        for prop in proposals:
+            review = self.risk_supervisor.review_proposal(prop, snapshot=snapshot)
+            reviews.append(review)
+            self.provenance_manager.record_decision(prop, review)
+
+        log.info("MarketScanner: generated %d decision proposals with %d risk supervisor reviews", len(proposals), len(reviews))
+        return proposals, reviews
 
     def _analyze_asset_bar(self, asset: str, bar: pd.Series) -> AssetAnalysis:
         """Process a single asset's latest feature bar."""
@@ -182,7 +243,6 @@ class MarketScanner:
 
         if self._model is not None:
             try:
-                # Prepare single-row DataFrame for model prediction
                 X_dict = {"asset": [asset]}
                 for col in FEATURE_COLUMNS:
                     X_dict[col] = [float(bar.get(col, 0.0) or 0.0)]
@@ -192,9 +252,8 @@ class MarketScanner:
                 prediction = float(pred_arr[0])
             except Exception as pred_err:
                 log.warning("Prediction error for %s: %s", asset, pred_err)
-                prediction = ema_dist * 2.0  # Heuristic fallback based on EMA distance
+                prediction = ema_dist * 2.0
         else:
-            # Fallback heuristic prediction
             prediction = ema_dist * 2.0 + ret_1 * 0.5
 
         # 3. Direction
@@ -205,21 +264,22 @@ class MarketScanner:
         else:
             direction = "NEUTRAL"
 
-        # 4. Probability (sigmoid mapping centered around threshold)
-        # Scaled so that prediction at thr gives ~65% probability, 2*thr gives ~85%
-        scale = 3.0 / max(0.001, thr)
-        prob_raw = 1.0 / (1.0 + math.exp(-prediction * scale))
-        if direction == "SHORT":
-            # Probability of winning the short trade
-            prob_raw = 1.0 / (1.0 + math.exp(prediction * scale))
-        elif direction == "NEUTRAL":
+        # 4. Calibrated Probability Calculation (Fix for 95% artificial cap audit)
+        # Uses smooth error function mapping normalized prediction to probability:
+        # rel_pred = prediction / thr
+        rel_pred = prediction / max(0.0001, thr)
+        if direction == "LONG":
+            prob_raw = 0.50 + 0.38 * (math.erf(rel_pred / 2.0))
+        elif direction == "SHORT":
+            prob_raw = 0.50 + 0.38 * (math.erf(abs(rel_pred) / 2.0))
+        else:
             prob_raw = 0.50
 
-        probability = max(0.05, min(0.95, prob_raw))
+        probability = max(0.10, min(0.90, prob_raw))
 
-        # 5. Confidence (ratio of magnitude to threshold)
+        # 5. Confidence
         conf_raw = abs(prediction) / max(0.0001, thr)
-        confidence = max(0.10, min(0.99, conf_raw / (conf_raw + 1.0)))
+        confidence = max(0.15, min(0.95, conf_raw / (conf_raw + 1.2)))
 
         # 6. EMA Trend & Market Regime
         ema_trend = "BULLISH" if ema_f >= ema_s else "BEARISH"

@@ -41,11 +41,11 @@ class MemoryContextBuilder:
 
     def __init__(
         self,
-        storage: AgentStorage,
-        procedural_memory: ProceduralMemory,
-        shadow_influence: ShadowMemoryInfluence,
-        attribution_engine: MemoryAttributionEngine,
-        episode_resolver: EpisodeResolver,
+        storage: Optional[AgentStorage] = None,
+        procedural_memory: Optional[ProceduralMemory] = None,
+        shadow_influence: Optional[ShadowMemoryInfluence] = None,
+        attribution_engine: Optional[MemoryAttributionEngine] = None,
+        episode_resolver: Optional[EpisodeResolver] = None,
     ) -> None:
         self._storage = storage
         self._procedural_memory = procedural_memory
@@ -103,12 +103,17 @@ class MemoryContextBuilder:
         snapshot: Optional[AgentSnapshot] = None,
     ) -> str:
         """ML model & live market scanner output context."""
-        # 1. Market Scanner results from snapshot
+        # 1. Market Scanner & Intelligence results from snapshot
         if snapshot and getattr(snapshot, "market_analysis", None):
             scan_items = snapshot.market_analysis
             lines = [
-                f"=== LIVE MARKET SCANNER ({len(scan_items)} Assets Analyzed) ===",
-                "Top 5 Ranked Assets:",
+                f"=== LIVE MARKET SCANNER & EVIDENCE INTELLIGENCE ({len(scan_items)} Assets Analyzed) ===",
+                "IMPORTANT SAFETY RULES FOR LLM PLANNER:",
+                "  - Do not treat missing or UNAVAILABLE evidence as confirmation.",
+                "  - Do not infer unavailable data.",
+                "  - Do not override deterministic risk policies.",
+                "  - Do not execute trades.",
+                "\nTop Ranked Assets with Independent Market Evidence:",
             ]
             for item in scan_items[:5]:
                 asset = item.asset if hasattr(item, "asset") else item.get("asset", "?")
@@ -119,17 +124,37 @@ class MemoryContextBuilder:
                 regime = item.market_regime if hasattr(item, "market_regime") else item.get("market_regime", "UNKNOWN")
                 vol = item.volatility if hasattr(item, "volatility") else item.get("volatility", 0.0)
                 rsi = item.rsi if hasattr(item, "rsi") else item.get("rsi", 50.0)
-                top_feats = item.top_features if hasattr(item, "top_features") else item.get("top_features", {})
                 rank = item.rank if hasattr(item, "rank") else item.get("rank", 0)
 
-                feat_str = ", ".join(f"{k}={v:.4f}" for k, v in list(top_feats.items())[:4])
+                summary = item.evidence_summary if hasattr(item, "evidence_summary") else None
+                if summary:
+                    agree_str = f"Agreement: {summary.agreement:.0%} ({summary.contradiction_level})"
+                    counts_str = f"Bullish: {summary.bullish_count} | Bearish: {summary.bearish_count} | Neutral: {summary.neutral_count} | Unavailable: {summary.unavailable_count}"
+                    qual_str = f"Quality: {summary.evidence_quality:.2f} | Composite Signal: {summary.composite_signal}"
+                else:
+                    agree_str = f"Agreement: {getattr(item, 'agreement_score', 0.0):.0%} ({getattr(item, 'contradiction_level', 'INSUFFICIENT')})"
+                    counts_str = ""
+                    qual_str = ""
 
                 lines.append(
                     f"{rank}. {asset}\n"
-                    f"   Direction: {direction} | Probability: {prob:.1%} | Confidence: {conf:.1%} | Trend: {trend}\n"
+                    f"   ML Direction: {direction} | Probability: {prob:.1%} | Confidence: {conf:.1%} | Tech Trend: {trend}\n"
                     f"   Regime: {regime} | Volatility: {vol:.4f} | RSI: {rsi:.1f}\n"
-                    f"   Top Features: {feat_str}"
+                    f"   Evidence Summary: {counts_str}\n"
+                    f"   {agree_str} | {qual_str}"
                 )
+
+                ev_list = item.market_evidence if hasattr(item, "market_evidence") else []
+                if ev_list:
+                    lines.append("   Evidence Breakdown:")
+                    for ev in ev_list:
+                        src = ev.source if hasattr(ev, "source") else ev.get("source", "?")
+                        sig = ev.signal if hasattr(ev, "signal") else ev.get("signal", "?")
+                        score = ev.score if hasattr(ev, "score") else ev.get("score", 0.0)
+                        e_conf = ev.confidence if hasattr(ev, "confidence") else ev.get("confidence", 0.0)
+                        rsn = ev.reason if hasattr(ev, "reason") else ev.get("reason", "")
+                        lines.append(f"    - {src.replace('_', ' ').title()}: {sig} (score={score:+.2f}, conf={e_conf:.2f}) | {rsn}")
+
             return "\n".join(lines)
 
         if not ml_prediction:

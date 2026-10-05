@@ -159,6 +159,36 @@ class AgentStorage(ABC):
     @abstractmethod
     def get_trade_replay_summary(self, limit: int = 50) -> List[Dict[str, Any]]: ...
 
+    # Phase 12.2 — Decision Proposals & Risk Reviews
+    @abstractmethod
+    def save_decision_proposal(self, proposal: Dict[str, Any]) -> int: ...
+
+    @abstractmethod
+    def get_recent_decision_proposals(self, limit: int = 20) -> List[Dict[str, Any]]: ...
+
+    @abstractmethod
+    def save_risk_supervisor_review(self, review: Dict[str, Any]) -> int: ...
+
+    @abstractmethod
+    def get_recent_risk_supervisor_reviews(self, limit: int = 20) -> List[Dict[str, Any]]: ...
+
+    # Phase 12.3 — Shadow Trades & Calibration Reports
+    @abstractmethod
+    def save_shadow_trade(self, shadow_trade: Dict[str, Any]) -> int: ...
+
+    @abstractmethod
+    def update_shadow_trade(self, shadow_trade: Dict[str, Any]) -> bool: ...
+
+    @abstractmethod
+    def get_recent_shadow_trades(self, limit: int = 50, outcome: Optional[str] = None) -> List[Dict[str, Any]]: ...
+
+    @abstractmethod
+    def save_calibration_report(self, report: Dict[str, Any]) -> int: ...
+
+    @abstractmethod
+    def get_latest_calibration_report(self) -> Optional[Dict[str, Any]]: ...
+
+
 # ===================== PG Schema =====================
 PG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_plans (id SERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL, input_snapshot JSONB, plan_json JSONB, approved_by TEXT DEFAULT 'auto', executed_at TIMESTAMPTZ, status TEXT DEFAULT 'pending');
@@ -246,6 +276,70 @@ CREATE TABLE IF NOT EXISTS agent_trade_replay_summary (
 CREATE INDEX IF NOT EXISTS idx_replay_summary_trade ON agent_trade_replay_summary(trade_id);
 CREATE INDEX IF NOT EXISTS idx_replay_summary_status ON agent_trade_replay_summary(status);
 CREATE INDEX IF NOT EXISTS idx_replay_summary_created ON agent_trade_replay_summary(created_at DESC);
+
+-- Phase 12.2 — Decision Proposals & Risk Reviews
+CREATE TABLE IF NOT EXISTS decision_proposals (
+    id SERIAL PRIMARY KEY,
+    decision_id TEXT NOT NULL UNIQUE,
+    ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    asset TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    confidence DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    proposal_json JSONB NOT NULL DEFAULT '{}',
+    llm_model TEXT NOT NULL DEFAULT 'deterministic',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_asset ON decision_proposals(asset);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_decision ON decision_proposals(decision);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_created ON decision_proposals(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS risk_supervisor_reviews (
+    id SERIAL PRIMARY KEY,
+    proposal_id TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    status TEXT NOT NULL,
+    risk_score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    review_json JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_proposal ON risk_supervisor_reviews(proposal_id);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_status ON risk_supervisor_reviews(status);
+
+-- Phase 12.3 — Shadow Trades & Calibration Reports
+CREATE TABLE IF NOT EXISTS shadow_trades (
+    id SERIAL PRIMARY KEY,
+    shadow_id TEXT NOT NULL UNIQUE,
+    decision_id TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    entry_reference_price DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    current_price DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    unrealized_return DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    max_favorable_excursion DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    max_adverse_excursion DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    final_return DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    outcome TEXT NOT NULL DEFAULT 'OPEN',
+    execution_mode TEXT NOT NULL DEFAULT 'SHADOW',
+    trade_json JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_asset ON shadow_trades(asset);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_outcome ON shadow_trades(outcome);
+
+CREATE TABLE IF NOT EXISTS calibration_reports (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    brier_score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    expected_calibration_error DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    overall_accuracy DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    calibration_status TEXT NOT NULL DEFAULT 'UNCALIBRATED',
+    performance_status TEXT NOT NULL DEFAULT 'NO_EDGE',
+    report_json JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_reports_created ON calibration_reports(created_at DESC);
 """
 
 # ===================== SQLite Schema =====================
@@ -329,6 +423,70 @@ CREATE TABLE IF NOT EXISTS agent_trade_replay_summary (
 CREATE INDEX IF NOT EXISTS idx_replay_summary_trade ON agent_trade_replay_summary(trade_id);
 CREATE INDEX IF NOT EXISTS idx_replay_summary_status ON agent_trade_replay_summary(status);
 CREATE INDEX IF NOT EXISTS idx_replay_summary_created ON agent_trade_replay_summary(created_at DESC);
+
+-- Phase 12.2 — Decision Proposals & Risk Reviews
+CREATE TABLE IF NOT EXISTS decision_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id TEXT NOT NULL UNIQUE,
+    ts TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.0,
+    proposal_json TEXT NOT NULL DEFAULT '{}',
+    llm_model TEXT NOT NULL DEFAULT 'deterministic',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_asset ON decision_proposals(asset);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_decision ON decision_proposals(decision);
+CREATE INDEX IF NOT EXISTS idx_decision_proposals_created ON decision_proposals(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS risk_supervisor_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    status TEXT NOT NULL,
+    risk_score REAL NOT NULL DEFAULT 0.0,
+    review_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_proposal ON risk_supervisor_reviews(proposal_id);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_status ON risk_supervisor_reviews(status);
+
+-- Phase 12.3 — Shadow Trades & Calibration Reports
+CREATE TABLE IF NOT EXISTS shadow_trades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shadow_id TEXT NOT NULL UNIQUE,
+    decision_id TEXT NOT NULL,
+    asset TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    entry_reference_price REAL NOT NULL DEFAULT 0.0,
+    current_price REAL NOT NULL DEFAULT 0.0,
+    unrealized_return REAL NOT NULL DEFAULT 0.0,
+    max_favorable_excursion REAL NOT NULL DEFAULT 0.0,
+    max_adverse_excursion REAL NOT NULL DEFAULT 0.0,
+    final_return REAL NOT NULL DEFAULT 0.0,
+    outcome TEXT NOT NULL DEFAULT 'OPEN',
+    execution_mode TEXT NOT NULL DEFAULT 'SHADOW',
+    trade_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_asset ON shadow_trades(asset);
+CREATE INDEX IF NOT EXISTS idx_shadow_trades_outcome ON shadow_trades(outcome);
+
+CREATE TABLE IF NOT EXISTS calibration_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    brier_score REAL NOT NULL DEFAULT 0.0,
+    expected_calibration_error REAL NOT NULL DEFAULT 0.0,
+    overall_accuracy REAL NOT NULL DEFAULT 0.0,
+    calibration_status TEXT NOT NULL DEFAULT 'UNCALIBRATED',
+    performance_status TEXT NOT NULL DEFAULT 'NO_EDGE',
+    report_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_reports_created ON calibration_reports(created_at DESC);
 """
 
 # ===================== PostgreSQL =====================
@@ -702,6 +860,177 @@ class PostgresAgentStorage(AgentStorage):
             log.exception("get_trade_replay_summary failed")
             return []
 
+    def save_decision_proposal(self, proposal: Dict[str, Any]) -> int:
+        with self._get_conn().cursor() as cur:
+            now = datetime.now(tz=timezone.utc)
+            decision_id = proposal.get("decision_id", "")
+            ts = proposal.get("timestamp", now.isoformat())
+            asset = proposal.get("asset", "")
+            direction = proposal.get("direction", "NEUTRAL")
+            decision = proposal.get("decision", "NO_TRADE")
+            confidence = float(proposal.get("confidence", 0.0))
+            llm_model = proposal.get("llm_model", "deterministic")
+            proposal_json = json.dumps(proposal)
+            cur.execute(
+                "INSERT INTO decision_proposals (decision_id, ts, asset, direction, decision, confidence, proposal_json, llm_model, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (decision_id) DO UPDATE SET decision=EXCLUDED.decision, confidence=EXCLUDED.confidence, proposal_json=EXCLUDED.proposal_json RETURNING id",
+                (decision_id, ts, asset, direction, decision, confidence, proposal_json, llm_model, now),
+            )
+            return int(cur.fetchone()[0])
+
+    def get_recent_decision_proposals(self, limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM decision_proposals ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+                res = []
+                for r in rows:
+                    item = dict(zip(cols, r))
+                    if isinstance(item.get("proposal_json"), str):
+                        try:
+                            item["proposal"] = json.loads(item["proposal_json"])
+                        except Exception:
+                            item["proposal"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_decision_proposals failed")
+            return []
+
+    def save_risk_supervisor_review(self, review: Dict[str, Any]) -> int:
+        with self._get_conn().cursor() as cur:
+            now = datetime.now(tz=timezone.utc)
+            proposal_id = review.get("proposal_id", "")
+            asset = review.get("asset", "")
+            status = review.get("status", "REJECTED")
+            risk_score = float(review.get("risk_score", 0.0))
+            review_json = json.dumps(review)
+            cur.execute(
+                "INSERT INTO risk_supervisor_reviews (proposal_id, asset, status, risk_score, review_json, created_at) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                (proposal_id, asset, status, risk_score, review_json, now),
+            )
+            return int(cur.fetchone()[0])
+
+    def get_recent_risk_supervisor_reviews(self, limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM risk_supervisor_reviews ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+                res = []
+                for r in rows:
+                    item = dict(zip(cols, r))
+                    if isinstance(item.get("review_json"), str):
+                        try:
+                            item["review"] = json.loads(item["review_json"])
+                        except Exception:
+                            item["review"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_risk_supervisor_reviews failed")
+            return []
+
+    # ── Phase 12.3 — Shadow Trades & Calibration Reports ──
+    def save_shadow_trade(self, shadow_trade: Dict[str, Any]) -> int:
+        with self._get_conn().cursor() as cur:
+            now = datetime.now(tz=timezone.utc)
+            shadow_id = shadow_trade.get("shadow_id", "")
+            decision_id = shadow_trade.get("decision_id", "")
+            asset = shadow_trade.get("asset", "")
+            direction = shadow_trade.get("direction", "NEUTRAL")
+            ref_price = float(shadow_trade.get("entry_reference_price", 0.0))
+            curr_price = float(shadow_trade.get("current_price", ref_price))
+            unrealized_return = float(shadow_trade.get("unrealized_return", 0.0))
+            mfe = float(shadow_trade.get("max_favorable_excursion", 0.0))
+            mae = float(shadow_trade.get("max_adverse_excursion", 0.0))
+            final_return = float(shadow_trade.get("final_return", 0.0))
+            outcome = shadow_trade.get("outcome", "OPEN")
+            execution_mode = shadow_trade.get("execution_mode", "SHADOW")
+            trade_json = json.dumps(shadow_trade)
+
+            cur.execute(
+                "INSERT INTO shadow_trades (shadow_id, decision_id, asset, direction, entry_reference_price, current_price, unrealized_return, max_favorable_excursion, max_adverse_excursion, final_return, outcome, execution_mode, trade_json, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (shadow_id) DO UPDATE SET current_price=EXCLUDED.current_price, unrealized_return=EXCLUDED.unrealized_return, max_favorable_excursion=EXCLUDED.max_favorable_excursion, max_adverse_excursion=EXCLUDED.max_adverse_excursion, final_return=EXCLUDED.final_return, outcome=EXCLUDED.outcome, trade_json=EXCLUDED.trade_json, updated_at=NOW() RETURNING id",
+                (shadow_id, decision_id, asset, direction, ref_price, curr_price, unrealized_return, mfe, mae, final_return, outcome, execution_mode, trade_json, now, now),
+            )
+            return int(cur.fetchone()[0])
+
+    def update_shadow_trade(self, shadow_trade: Dict[str, Any]) -> bool:
+        with self._get_conn().cursor() as cur:
+            shadow_id = shadow_trade.get("shadow_id", "")
+            curr_price = float(shadow_trade.get("current_price", 0.0))
+            unrealized_return = float(shadow_trade.get("unrealized_return", 0.0))
+            mfe = float(shadow_trade.get("max_favorable_excursion", 0.0))
+            mae = float(shadow_trade.get("max_adverse_excursion", 0.0))
+            final_return = float(shadow_trade.get("final_return", 0.0))
+            outcome = shadow_trade.get("outcome", "OPEN")
+            trade_json = json.dumps(shadow_trade)
+
+            cur.execute(
+                "UPDATE shadow_trades SET current_price=%s, unrealized_return=%s, max_favorable_excursion=%s, max_adverse_excursion=%s, final_return=%s, outcome=%s, trade_json=%s, updated_at=NOW() WHERE shadow_id=%s",
+                (curr_price, unrealized_return, mfe, mae, final_return, outcome, trade_json, shadow_id),
+            )
+            return cur.rowcount > 0
+
+    def get_recent_shadow_trades(self, limit: int = 50, outcome: Optional[str] = None) -> List[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                if outcome:
+                    cur.execute("SELECT * FROM shadow_trades WHERE outcome=%s ORDER BY created_at DESC LIMIT %s", (outcome, limit))
+                else:
+                    cur.execute("SELECT * FROM shadow_trades ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+                res = []
+                for r in rows:
+                    item = dict(zip(cols, r))
+                    if isinstance(item.get("trade_json"), str):
+                        try:
+                            item["shadow_trade"] = json.loads(item["trade_json"])
+                        except Exception:
+                            item["shadow_trade"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_shadow_trades failed")
+            return []
+
+    def save_calibration_report(self, report: Dict[str, Any]) -> int:
+        with self._get_conn().cursor() as cur:
+            now = datetime.now(tz=timezone.utc)
+            ts = report.get("timestamp", now.isoformat())
+            brier = float(report.get("brier_score", 0.0))
+            ece = float(report.get("expected_calibration_error", 0.0))
+            accuracy = float(report.get("overall_accuracy", 0.0))
+            cal_status = report.get("calibration_status", "UNCALIBRATED")
+            perf_status = report.get("performance_status", "NO_EDGE")
+            report_json = json.dumps(report)
+
+            cur.execute(
+                "INSERT INTO calibration_reports (timestamp, brier_score, expected_calibration_error, overall_accuracy, calibration_status, performance_status, report_json, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (ts, brier, ece, accuracy, cal_status, perf_status, report_json, now),
+            )
+            return int(cur.fetchone()[0])
+
+    def get_latest_calibration_report(self) -> Optional[Dict[str, Any]]:
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute("SELECT * FROM calibration_reports ORDER BY created_at DESC LIMIT 1")
+                row = cur.fetchone()
+                if row:
+                    cols = [desc[0] for desc in cur.description]
+                    item = dict(zip(cols, row))
+                    if isinstance(item.get("report_json"), str):
+                        try:
+                            item["report"] = json.loads(item["report_json"])
+                        except Exception:
+                            item["report"] = {}
+                    return item
+                return None
+        except Exception:
+            log.exception("get_latest_calibration_report failed")
+            return None
+
 # ===================== SQLite =====================
 class SQLiteAgentStorage(AgentStorage):
     def __init__(self, db_path: str = "agent/agent.sqlite") -> None:
@@ -1022,6 +1351,179 @@ class SQLiteAgentStorage(AgentStorage):
         except Exception:
             log.exception("get_trade_replay_summary failed")
             return []
+
+    def save_decision_proposal(self, proposal: Dict[str, Any]) -> int:
+        with self._con() as con:
+            now = datetime.now(tz=timezone.utc).isoformat()
+            decision_id = proposal.get("decision_id", "")
+            ts = proposal.get("timestamp", now)
+            asset = proposal.get("asset", "")
+            direction = proposal.get("direction", "NEUTRAL")
+            decision = proposal.get("decision", "NO_TRADE")
+            confidence = float(proposal.get("confidence", 0.0))
+            llm_model = proposal.get("llm_model", "deterministic")
+            proposal_json = json.dumps(proposal)
+            return int(
+                con.execute(
+                    "INSERT OR REPLACE INTO decision_proposals (decision_id, ts, asset, direction, decision, confidence, proposal_json, llm_model, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (decision_id, ts, asset, direction, decision, confidence, proposal_json, llm_model, now),
+                ).lastrowid
+            )
+
+    def get_recent_decision_proposals(self, limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                rows = con.execute("SELECT * FROM decision_proposals ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+                res = []
+                for r in rows:
+                    item = dict(r)
+                    if isinstance(item.get("proposal_json"), str):
+                        try:
+                            item["proposal"] = json.loads(item["proposal_json"])
+                        except Exception:
+                            item["proposal"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_decision_proposals failed")
+            return []
+
+    def save_risk_supervisor_review(self, review: Dict[str, Any]) -> int:
+        with self._con() as con:
+            now = datetime.now(tz=timezone.utc).isoformat()
+            proposal_id = review.get("proposal_id", "")
+            asset = review.get("asset", "")
+            status = review.get("status", "REJECTED")
+            risk_score = float(review.get("risk_score", 0.0))
+            review_json = json.dumps(review)
+            return int(
+                con.execute(
+                    "INSERT INTO risk_supervisor_reviews (proposal_id, asset, status, risk_score, review_json, created_at) VALUES (?,?,?,?,?,?)",
+                    (proposal_id, asset, status, risk_score, review_json, now),
+                ).lastrowid
+            )
+
+    def get_recent_risk_supervisor_reviews(self, limit: int = 20) -> List[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                rows = con.execute("SELECT * FROM risk_supervisor_reviews ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+                res = []
+                for r in rows:
+                    item = dict(r)
+                    if isinstance(item.get("review_json"), str):
+                        try:
+                            item["review"] = json.loads(item["review_json"])
+                        except Exception:
+                            item["review"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_risk_supervisor_reviews failed")
+            return []
+
+    # ── Phase 12.3 — Shadow Trades & Calibration Reports ──
+    def save_shadow_trade(self, shadow_trade: Dict[str, Any]) -> int:
+        with self._con() as con:
+            now = datetime.now(tz=timezone.utc).isoformat()
+            shadow_id = shadow_trade.get("shadow_id", "")
+            decision_id = shadow_trade.get("decision_id", "")
+            asset = shadow_trade.get("asset", "")
+            direction = shadow_trade.get("direction", "NEUTRAL")
+            ref_price = float(shadow_trade.get("entry_reference_price", 0.0))
+            curr_price = float(shadow_trade.get("current_price", ref_price))
+            unrealized_return = float(shadow_trade.get("unrealized_return", 0.0))
+            mfe = float(shadow_trade.get("max_favorable_excursion", 0.0))
+            mae = float(shadow_trade.get("max_adverse_excursion", 0.0))
+            final_return = float(shadow_trade.get("final_return", 0.0))
+            outcome = shadow_trade.get("outcome", "OPEN")
+            execution_mode = shadow_trade.get("execution_mode", "SHADOW")
+            trade_json = json.dumps(shadow_trade)
+
+            return int(
+                con.execute(
+                    "INSERT OR REPLACE INTO shadow_trades (shadow_id, decision_id, asset, direction, entry_reference_price, current_price, unrealized_return, max_favorable_excursion, max_adverse_excursion, final_return, outcome, execution_mode, trade_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (shadow_id, decision_id, asset, direction, ref_price, curr_price, unrealized_return, mfe, mae, final_return, outcome, execution_mode, trade_json, now, now),
+                ).lastrowid
+            )
+
+    def update_shadow_trade(self, shadow_trade: Dict[str, Any]) -> bool:
+        with self._con() as con:
+            now = datetime.now(tz=timezone.utc).isoformat()
+            shadow_id = shadow_trade.get("shadow_id", "")
+            curr_price = float(shadow_trade.get("current_price", 0.0))
+            unrealized_return = float(shadow_trade.get("unrealized_return", 0.0))
+            mfe = float(shadow_trade.get("max_favorable_excursion", 0.0))
+            mae = float(shadow_trade.get("max_adverse_excursion", 0.0))
+            final_return = float(shadow_trade.get("final_return", 0.0))
+            outcome = shadow_trade.get("outcome", "OPEN")
+            trade_json = json.dumps(shadow_trade)
+
+            cur = con.execute(
+                "UPDATE shadow_trades SET current_price=?, unrealized_return=?, max_favorable_excursion=?, max_adverse_excursion=?, final_return=?, outcome=?, trade_json=?, updated_at=? WHERE shadow_id=?",
+                (curr_price, unrealized_return, mfe, mae, final_return, outcome, trade_json, now, shadow_id),
+            )
+            return cur.rowcount > 0
+
+    def get_recent_shadow_trades(self, limit: int = 50, outcome: Optional[str] = None) -> List[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                if outcome:
+                    rows = con.execute("SELECT * FROM shadow_trades WHERE outcome=? ORDER BY created_at DESC LIMIT ?", (outcome, limit)).fetchall()
+                else:
+                    rows = con.execute("SELECT * FROM shadow_trades ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+                res = []
+                for r in rows:
+                    item = dict(r)
+                    if isinstance(item.get("trade_json"), str):
+                        try:
+                            item["shadow_trade"] = json.loads(item["trade_json"])
+                        except Exception:
+                            item["shadow_trade"] = {}
+                    res.append(item)
+                return res
+        except Exception:
+            log.exception("get_recent_shadow_trades failed")
+            return []
+
+    def save_calibration_report(self, report: Dict[str, Any]) -> int:
+        with self._con() as con:
+            now = datetime.now(tz=timezone.utc).isoformat()
+            ts = report.get("timestamp", now)
+            brier = float(report.get("brier_score", 0.0))
+            ece = float(report.get("expected_calibration_error", 0.0))
+            accuracy = float(report.get("overall_accuracy", 0.0))
+            cal_status = report.get("calibration_status", "UNCALIBRATED")
+            perf_status = report.get("performance_status", "NO_EDGE")
+            report_json = json.dumps(report)
+
+            return int(
+                con.execute(
+                    "INSERT INTO calibration_reports (timestamp, brier_score, expected_calibration_error, overall_accuracy, calibration_status, performance_status, report_json, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (ts, brier, ece, accuracy, cal_status, perf_status, report_json, now),
+                ).lastrowid
+            )
+
+    def get_latest_calibration_report(self) -> Optional[Dict[str, Any]]:
+        try:
+            with self._con() as con:
+                con.row_factory = sqlite3.Row
+                row = con.execute("SELECT * FROM calibration_reports ORDER BY created_at DESC LIMIT 1").fetchone()
+                if row:
+                    item = dict(row)
+                    if isinstance(item.get("report_json"), str):
+                        try:
+                            item["report"] = json.loads(item["report_json"])
+                        except Exception:
+                            item["report"] = {}
+                    return item
+                return None
+        except Exception:
+            log.exception("get_latest_calibration_report failed")
+            return None
+
 
 # ===================== Factory =====================
 def make_storage() -> AgentStorage:

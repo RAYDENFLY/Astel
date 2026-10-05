@@ -430,6 +430,60 @@ class TradeRecorder:
         self._flush(trade_id)
 
     # ------------------------------------------------------------------
+    # Phase 12.2 — Multi-Agent Decision & Evidence Fusion Replay Events
+    # (Read-only analysis events: NO order submission triggered)
+    # ------------------------------------------------------------------
+
+    def record_specialist_analysis(self, trade_id: str, asset: str, specialists_summary: Dict[str, Any]) -> None:
+        """Record specialist analysis outputs event."""
+        self._record_event(
+            trade_id, "specialist_analysis",
+            {
+                "asset": asset,
+                "specialists": specialists_summary,
+            }
+        )
+
+    def record_evidence_fused(self, trade_id: str, asset: str, fusion_summary: Dict[str, Any]) -> None:
+        """Record evidence fusion result event."""
+        self._record_event(
+            trade_id, "evidence_fused",
+            {
+                "asset": asset,
+                "fusion": fusion_summary,
+            },
+            confidence=fusion_summary.get("confidence", 0.0),
+        )
+
+    def record_decision_created(self, trade_id: str, asset: str, proposal_summary: Dict[str, Any]) -> None:
+        """Record decision proposal created event (TRADE_CANDIDATE | WATCH | NO_TRADE)."""
+        self._record_event(
+            trade_id, "decision_created",
+            {
+                "asset": asset,
+                "decision": proposal_summary.get("decision"),
+                "direction": proposal_summary.get("direction"),
+                "confidence": proposal_summary.get("confidence"),
+                "reasoning": proposal_summary.get("reasoning", []),
+            },
+            status=proposal_summary.get("decision", ""),
+            confidence=proposal_summary.get("confidence", 0.0),
+        )
+
+    def record_decision_reviewed(self, trade_id: str, asset: str, review_summary: Dict[str, Any]) -> None:
+        """Record risk supervisor review event (APPROVED_FOR_RISK_REVIEW | REJECTED | WATCH)."""
+        self._record_event(
+            trade_id, "decision_reviewed",
+            {
+                "asset": asset,
+                "review_status": review_summary.get("status"),
+                "risk_score": review_summary.get("risk_score"),
+                "rejection_reasons": review_summary.get("rejection_reasons", []),
+            },
+            status=review_summary.get("status", ""),
+        )
+
+    # ------------------------------------------------------------------
     # Query
     # ------------------------------------------------------------------
 

@@ -121,6 +121,30 @@ class AgentPlan(BaseModel):
 # Snapshot model — input ke LLM
 # ---------------------------------------------------------------------------
 
+class MarketEvidence(BaseModel):
+    source: str             # "order_book" | "large_flow" | "open_interest" | "funding" | "positioning" | "btc_regime" | "news" | "technical" | "ml"
+    signal: str             # "BULLISH" | "BEARISH" | "NEUTRAL" | "UNAVAILABLE" | "STALE" | "ERROR"
+    score: float = 0.0      # normalized signal score [-1.0, 1.0]
+    confidence: float = 0.0 # confidence [0.0, 1.0]
+    timestamp: str = ""
+    freshness_seconds: float = 0.0
+    status: str = "VALID"   # "VALID" | "STALE" | "UNAVAILABLE" | "ERROR"
+    reason: str = ""
+    raw_metrics: Dict[str, Any] = Field(default_factory=dict)
+
+
+class EvidenceSummary(BaseModel):
+    agreement: float = 0.0
+    contradiction_level: str = "INSUFFICIENT_DATA"  # "STRONG_AGREEMENT" | "MODERATE_AGREEMENT" | "MIXED" | "STRONG_CONTRADICTION" | "INSUFFICIENT_DATA"
+    bullish_count: int = 0
+    bearish_count: int = 0
+    neutral_count: int = 0
+    unavailable_count: int = 0
+    evidence_quality: float = 0.0
+    weighted_score: float = 0.0
+    composite_signal: str = "NEUTRAL"
+
+
 class AssetAnalysis(BaseModel):
     asset: str
     direction: str             # "LONG" | "SHORT" | "NEUTRAL"
@@ -136,6 +160,14 @@ class AssetAnalysis(BaseModel):
     rsi: float
     ema_trend: str
     rank: int = 0
+
+    # Phase 12.1 — Market Intelligence extension
+    market_evidence: List[MarketEvidence] = Field(default_factory=list)
+    evidence_summary: Optional[EvidenceSummary] = None
+    agreement_score: float = 0.0
+    contradiction_level: str = "INSUFFICIENT_DATA"
+    evidence_quality: float = 0.0
+    data_freshness_sec: float = 0.0
 
 
 class PositionSnapshot(BaseModel):
@@ -178,6 +210,9 @@ class AgentSnapshot(BaseModel):
     realized_pnl_7d: float = 0.0
     realized_pnl_30d: float = 0.0
     win_rate_30d: float = 0.0
+    # Phase 12.2 decision & risk supervisor outputs
+    decision_proposals: List[DecisionProposal] = Field(default_factory=list)
+    risk_reviews: List[RiskSupervisorReview] = Field(default_factory=list)
 
     def to_prompt_text(self) -> str:
         """Format ringkas untuk disisipkan ke prompt LLM — tanpa secret."""
@@ -245,3 +280,154 @@ class TokenUsage(BaseModel):
             cache_miss_input_tokens=cache_miss,
             cost_usd=cost,
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.2 — Multi-Agent Market Decision & Evidence Fusion Schemas
+# ---------------------------------------------------------------------------
+
+class SpecialistOutput(BaseModel):
+    specialist_name: str       # "technical_ml" | "order_flow" | "derivatives" | "macro_regime" | "news_sentiment"
+    direction: str             # "LONG" | "SHORT" | "NEUTRAL" | "UNAVAILABLE"
+    confidence: float = 0.0    # [0.0, 1.0]
+    evidence: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(default_factory=list)
+    status: str = "VALID"      # "VALID" | "UNAVAILABLE" | "STALE" | "ERROR"
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FusionResult(BaseModel):
+    directional_score: float = 0.0     # [-1.0, 1.0]
+    confidence: float = 0.0            # [0.0, 1.0]
+    agreement_score: float = 0.0       # [0.0, 1.0]
+    contradiction_level: str = "INSUFFICIENT_DATA" # "STRONG_AGREEMENT" | "MODERATE_AGREEMENT" | "MIXED" | "STRONG_CONTRADICTION" | "INSUFFICIENT_DATA"
+    evidence_quality: float = 0.0      # [0.0, 1.0]
+    data_quality: float = 0.0          # [0.0, 1.0]
+    freshness_score: float = 0.0       # [0.0, 1.0]
+    confidence_band: str = "NO_TRADE"  # "HIGH" | "MEDIUM" | "LOW" | "NO_TRADE"
+    composite_direction: str = "NEUTRAL" # "LONG" | "SHORT" | "NEUTRAL"
+    weighted_weights: Dict[str, float] = Field(default_factory=dict)
+
+
+class DecisionProposal(BaseModel):
+    decision_id: str
+    timestamp: str
+    asset: str
+    direction: str                      # "LONG" | "SHORT" | "NEUTRAL"
+    decision: str                       # "TRADE_CANDIDATE" | "WATCH" | "NO_TRADE"
+    confidence: float = 0.0
+    reasoning: List[str] = Field(default_factory=list)
+    supporting_evidence: List[str] = Field(default_factory=list)
+    contradicting_evidence: List[str] = Field(default_factory=list)
+    risk_flags: List[str] = Field(default_factory=list)
+    required_risk_review: bool = True
+    # Provenance details
+    scanner_rank: int = 0
+    model_signal: str = "NEUTRAL"
+    market_evidence: List[MarketEvidence] = Field(default_factory=list)
+    specialist_outputs: List[SpecialistOutput] = Field(default_factory=list)
+    fusion_result: Optional[FusionResult] = None
+    contradictions: List[str] = Field(default_factory=list)
+    data_quality: float = 0.0
+    freshness: float = 0.0
+    llm_model: str = "deterministic"
+    llm_latency_ms: float = 0.0
+    llm_failures: int = 0
+    fallback_used: bool = False
+
+
+class RiskSupervisorReview(BaseModel):
+    proposal_id: str
+    asset: str
+    status: str                         # "APPROVED_FOR_RISK_REVIEW" | "REJECTED" | "WATCH"
+    rejection_reasons: List[str] = Field(default_factory=list)
+    risk_score: float = 0.0             # [0.0, 1.0]
+    timestamp: str
+    reviewed_decision: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.3 — Decision Calibration, Replay & Shadow Trading Models
+# ---------------------------------------------------------------------------
+
+class DecisionOutcome(BaseModel):
+    decision_id: str
+    asset: str
+    timestamp: str
+    decision: str                      # "TRADE_CANDIDATE" | "WATCH" | "NO_TRADE"
+    direction: str                     # "LONG" | "SHORT" | "NEUTRAL"
+    confidence: float
+    confidence_band: str               # "HIGH" | "MEDIUM" | "LOW" | "NO_TRADE"
+    agreement_score: float
+    contradiction_level: str
+    evidence_quality: float
+    data_quality: float
+    data_freshness: float
+    scanner_rank: int = 0
+    # Forward Returns (evaluating ONLY data AFTER decision timestamp)
+    forward_return_1: float = 0.0
+    forward_return_3: float = 0.0
+    forward_return_6: float = 0.0
+    forward_return_12: float = 0.0
+    forward_return_24: float = 0.0
+    # Outcomes
+    direction_correct: bool = False
+    outcome_class: str = "NEUTRAL"     # "CORRECT" | "INCORRECT" | "NEUTRAL" | "INSUFFICIENT_DATA"
+    # Metadata context
+    market_regime: str = "NEUTRAL"
+    btc_regime: str = "NEUTRAL"
+    specialist_signals: Dict[str, str] = Field(default_factory=dict)
+    fusion_score: float = 0.0
+
+
+class ShadowTrade(BaseModel):
+    shadow_id: str
+    decision_id: str
+    asset: str
+    timestamp: str
+    direction: str                     # "LONG" | "SHORT" | "NEUTRAL"
+    entry_reference_price: float
+    current_price: float = 0.0
+    decision_confidence: float = 0.0
+    confidence_band: str = "NO_TRADE"
+    agreement_score: float = 0.0
+    contradiction_level: str = "INSUFFICIENT_DATA"
+    evidence_quality: float = 0.0
+    risk_status: str = "WATCH"          # "APPROVED_FOR_RISK_REVIEW" | "REJECTED" | "WATCH"
+    execution_mode: str = "SHADOW"      # Strict enforcement: NEVER real execution
+    # Simulated Performance Tracking
+    unrealized_return: float = 0.0
+    max_favorable_excursion: float = 0.0 # MFE %
+    max_adverse_excursion: float = 0.0   # MAE %
+    closed_at: Optional[str] = None
+    final_return: float = 0.0
+    outcome: str = "OPEN"               # "OPEN" | "WIN" | "LOSS" | "EXPIRED" | "CLOSED"
+
+
+class CalibrationBin(BaseModel):
+    bin_min: float
+    bin_max: float
+    sample_count: int = 0
+    predicted_confidence: float = 0.0
+    actual_accuracy: float = 0.0
+    calibration_error: float = 0.0
+    avg_forward_return: float = 0.0
+    median_forward_return: float = 0.0
+
+
+class CalibrationReport(BaseModel):
+    timestamp: str
+    total_decisions: int = 0
+    evaluated_decisions: int = 0
+    brier_score: float = 0.0
+    expected_calibration_error: float = 0.0
+    overall_accuracy: float = 0.0
+    positive_return_ratio: float = 0.0
+    bins: List[CalibrationBin] = Field(default_factory=list)
+    baseline_comparisons: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    asset_breakdown: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    regime_breakdown: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    agreement_breakdown: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    calibration_status: str = "UNCALIBRATED" # "CALIBRATED" | "PARTIALLY_CALIBRATED" | "UNCALIBRATED" | "INSUFFICIENT_SAMPLE"
+    performance_status: str = "NO_EDGE"       # "POSITIVE_EDGE" | "POSSIBLE_EDGE" | "NO_EDGE" | "INSUFFICIENT_SAMPLE"
+
