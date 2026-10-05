@@ -42,7 +42,7 @@ class ReplayConfig:
         "BTC_USDT", "ETH_USDT", "SOL_USDT", "BNB_USDT", "XRP_USDT", "AVAX_USDT",
         "LINK_USDT", "DOGE_USDT", "ADA_USDT", "LTC_USDT", "AAVE_USDT", "SUI_USDT"
     ])
-    warmup_period: int = 75
+    warmup_period: int = 90
     top_n: int = 3
     decision_horizon: int = 3       # Default 3 candles forward evaluation (12h for 4h candles)
     llm_replay_enabled: bool = False # Default deterministic mode to avoid API costs

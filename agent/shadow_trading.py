@@ -5,9 +5,8 @@ Simulates live trades without order submission or exchange interaction.
 
 CRITICAL EXECUTION SAFETY BOUNDARY:
 - EXECUTION_MODE = "SHADOW"
-- ZERO order placement calls
-- ZERO Gate.io API order submission
-- ZERO ExecutionEngine or GateExecutor calls
+- ZERO live order placement
+- ZERO exchange API order submission
 - Simulated tracking ONLY
 """
 

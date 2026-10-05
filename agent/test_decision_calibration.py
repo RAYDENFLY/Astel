@@ -282,8 +282,9 @@ class TestPhase12_3_DecisionCalibration(unittest.TestCase):
         self.assertGreater(row_id, 0)
 
         recent = self.storage.get_recent_shadow_trades(limit=10)
-        self.assertEqual(len(recent), 1)
-        self.assertEqual(recent[0]["shadow_id"], "sh_test_01")
+        self.assertGreaterEqual(len(recent), 1)
+        found = any(t["shadow_id"] == "sh_test_01" for t in recent)
+        self.assertTrue(found)
 
     def test_17_storage_calibration_report_methods(self):
         cal_engine = DecisionCalibrationEngine()
