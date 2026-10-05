@@ -71,7 +71,7 @@ class MemoryContextBuilder:
         sections = []
 
         # ── 1. Market Prediction Context ──
-        sections.append(self._build_prediction_context(ml_prediction))
+        sections.append(self._build_prediction_context(ml_prediction, snapshot))
 
         # ── 2. Procedural Memory (Validated Patterns) ──
         sections.append(self._build_procedural_context(survival_mode, analyst_consensus, debate_verdict))
@@ -97,8 +97,41 @@ class MemoryContextBuilder:
         # Join all sections with clear separators
         return "\n\n".join(s for s in sections if s)
 
-    def _build_prediction_context(self, ml_prediction: Optional[Dict[str, Any]]) -> str:
-        """ML model output context."""
+    def _build_prediction_context(
+        self,
+        ml_prediction: Optional[Dict[str, Any]],
+        snapshot: Optional[AgentSnapshot] = None,
+    ) -> str:
+        """ML model & live market scanner output context."""
+        # 1. Market Scanner results from snapshot
+        if snapshot and getattr(snapshot, "market_analysis", None):
+            scan_items = snapshot.market_analysis
+            lines = [
+                f"=== LIVE MARKET SCANNER ({len(scan_items)} Assets Analyzed) ===",
+                "Top 5 Ranked Assets:",
+            ]
+            for item in scan_items[:5]:
+                asset = item.asset if hasattr(item, "asset") else item.get("asset", "?")
+                direction = item.direction if hasattr(item, "direction") else item.get("direction", "NEUTRAL")
+                prob = item.probability if hasattr(item, "probability") else item.get("probability", 0.5)
+                conf = item.confidence if hasattr(item, "confidence") else item.get("confidence", 0.5)
+                trend = item.ema_trend if hasattr(item, "ema_trend") else item.get("ema_trend", "NEUTRAL")
+                regime = item.market_regime if hasattr(item, "market_regime") else item.get("market_regime", "UNKNOWN")
+                vol = item.volatility if hasattr(item, "volatility") else item.get("volatility", 0.0)
+                rsi = item.rsi if hasattr(item, "rsi") else item.get("rsi", 50.0)
+                top_feats = item.top_features if hasattr(item, "top_features") else item.get("top_features", {})
+                rank = item.rank if hasattr(item, "rank") else item.get("rank", 0)
+
+                feat_str = ", ".join(f"{k}={v:.4f}" for k, v in list(top_feats.items())[:4])
+
+                lines.append(
+                    f"{rank}. {asset}\n"
+                    f"   Direction: {direction} | Probability: {prob:.1%} | Confidence: {conf:.1%} | Trend: {trend}\n"
+                    f"   Regime: {regime} | Volatility: {vol:.4f} | RSI: {rsi:.1f}\n"
+                    f"   Top Features: {feat_str}"
+                )
+            return "\n".join(lines)
+
         if not ml_prediction:
             return "=== ML PREDICTION ===\nNo prediction available."
 
@@ -134,6 +167,9 @@ class MemoryContextBuilder:
         debate_verdict: str,
     ) -> str:
         """Validated procedural patterns from memory."""
+        if not self._procedural_memory:
+            return "=== VALIDATED PATTERNS ===\nNo validated patterns available."
+
         patterns = self._procedural_memory.get_relevant_rules(
             survival_mode=survival_mode,
             analyst_consensus=analyst_consensus,
@@ -162,6 +198,9 @@ class MemoryContextBuilder:
 
     def _build_episodic_context(self) -> str:
         """Recent resolved episodes with outcomes."""
+        if not self._storage:
+            return "=== EPISODIC MEMORY ===\nNo resolved episodes yet."
+
         episodes = self._storage.get_recent_episodes(limit=20)
         resolved = [ep for ep in episodes if ep.get("resolved")]
 
@@ -169,7 +208,7 @@ class MemoryContextBuilder:
             return "=== EPISODIC MEMORY ===\nNo resolved episodes yet."
 
         # Get attribution metrics for learning signals
-        attribution_metrics = self._attribution_engine.get_attribution_metrics()
+        attribution_metrics = self._attribution_engine.get_attribution_metrics() if self._attribution_engine else {}
 
         lines = ["=== EPISODIC MEMORY (Last 10 Resolved) ==="]
 

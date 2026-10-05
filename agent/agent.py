@@ -286,6 +286,10 @@ class AutonomousAgent:
             episode_resolver=self._episode_resolver,
         )
 
+        # Phase 12.0 — Market Scanner (scans all configured assets live every tick)
+        from agent.market_scanner import MarketScanner
+        self._market_scanner = MarketScanner(cfg=self.cfg)
+
         # Phase 9.2 — Reasoning Validator (audits every LLM plan)
         self._reasoning_validator = ReasoningValidator(storage=self._storage)
 
@@ -418,6 +422,14 @@ class AutonomousAgent:
             self._treasury.save(self._survival_mode.value)
             return
 
+        # 2b. Run MarketScanner for all configured assets
+        market_analysis = []
+        try:
+            market_analysis = self._market_scanner.scan_all_assets()
+            log.info("MarketScanner tick #%d: analyzed %d assets", self._loop_count, len(market_analysis))
+        except Exception as ms_err:
+            log.warning("MarketScanner tick #%d failed (non-fatal): %s", self._loop_count, ms_err)
+
         # 3. Fetch snapshot
         snapshot = fetch_snapshot(
             dashboard_base_url = self.cfg["dashboard_base_url"],
@@ -426,6 +438,7 @@ class AutonomousAgent:
             survival_mode      = self._survival_mode,
             agent_mode         = self._mode,
             llm_cost_today_usd = self._treasury._llm_cost_today,
+            market_analysis    = market_analysis,
         )
 
         # 3b. Run analyst team (Phase 4)

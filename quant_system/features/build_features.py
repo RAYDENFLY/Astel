@@ -20,7 +20,7 @@ import pandas as pd
 class FeatureBuilder:
     cfg: Dict
 
-    def build(self, ohlcv: pd.DataFrame) -> pd.DataFrame:
+    def build(self, ohlcv: pd.DataFrame, is_training: bool = True) -> pd.DataFrame:
         ohlcv = ohlcv.copy()
         ohlcv["timestamp"] = pd.to_datetime(ohlcv["timestamp"], utc=True)
         ohlcv = ohlcv.sort_values(["asset", "timestamp"]).reset_index(drop=True)
@@ -66,6 +66,16 @@ class FeatureBuilder:
         vol_std = g["volume"].rolling(vz_period).std(ddof=0).reset_index(level=0, drop=True)
         ohlcv["volume_zscore"] = (ohlcv["volume"] - vol_mean) / vol_std.replace(0.0, np.nan)
 
+        # RSI (14-period)
+        delta = g["close"].diff()
+        gain = delta.clip(lower=0.0)
+        loss = -delta.clip(upper=0.0)
+        avg_gain = gain.groupby(ohlcv["asset"]).rolling(14).mean().reset_index(level=0, drop=True)
+        avg_loss = loss.groupby(ohlcv["asset"]).rolling(14).mean().reset_index(level=0, drop=True)
+        rs = avg_gain / avg_loss.replace(0.0, np.nan)
+        ohlcv["rsi"] = 100.0 - (100.0 / (1.0 + rs.replace(0.0, np.nan)))
+        ohlcv["rsi"] = ohlcv["rsi"].fillna(50.0)
+
         # Target (no leakage: future return is shifted -1)
         ohlcv["future_return"] = g["close"].shift(-1) / ohlcv["close"] - 1.0
         ohlcv["target"] = ohlcv["future_return"] / ohlcv["atr"].replace(0.0, np.nan)
@@ -85,10 +95,13 @@ class FeatureBuilder:
             "ema_slope",
             "ema_distance",
             "volume_zscore",
-            "target",
         ]
+        if is_training:
+            feature_cols.append("target")
+
         ohlcv = ohlcv.dropna(subset=feature_cols).reset_index(drop=True)
 
         return ohlcv
+
 
 

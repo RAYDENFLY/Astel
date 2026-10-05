@@ -121,6 +121,23 @@ class AgentPlan(BaseModel):
 # Snapshot model — input ke LLM
 # ---------------------------------------------------------------------------
 
+class AssetAnalysis(BaseModel):
+    asset: str
+    direction: str             # "LONG" | "SHORT" | "NEUTRAL"
+    probability: float
+    confidence: float
+    prediction: float
+    threshold: float
+    market_regime: str
+    top_features: Dict[str, float] = Field(default_factory=dict)
+    volatility: float
+    momentum: float
+    atr: float
+    rsi: float
+    ema_trend: str
+    rank: int = 0
+
+
 class PositionSnapshot(BaseModel):
     contract: str
     side: str          # LONG | SHORT
@@ -146,6 +163,8 @@ class AgentSnapshot(BaseModel):
     ts: datetime
     account: AccountSnapshot
     positions: List[PositionSnapshot] = Field(default_factory=list)
+    # market scanner
+    market_analysis: List[AssetAnalysis] = Field(default_factory=list)
     # runner health
     last_candle_ts: Dict[str, str] = Field(default_factory=dict)   # asset → ISO ts
     runner_error_count: int = 0
@@ -172,6 +191,14 @@ class AgentSnapshot(BaseModel):
             f"PnL 7d: ${self.realized_pnl_7d:.2f}  PnL 30d: ${self.realized_pnl_30d:.2f}  WinRate 30d: {self.win_rate_30d:.1%}",
             "",
         ]
+        if self.market_analysis:
+            lines.append("Market Scanner Summary (Top Assets):")
+            for item in self.market_analysis[:5]:
+                lines.append(
+                    f"  #{item.rank} {item.asset}: {item.direction} | Prob: {item.probability:.0%} | "
+                    f"Conf: {item.confidence:.0%} | Trend: {item.ema_trend} | Vol: {item.volatility:.4f} | RSI: {item.rsi:.1f}"
+                )
+            lines.append("")
         if self.positions:
             lines.append("Positions:")
             for p in self.positions:

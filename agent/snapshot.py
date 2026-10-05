@@ -27,6 +27,7 @@ def fetch_snapshot(
     llm_cost_today_usd: float = 0.0,
     runner_error_count: int = 0,
     timeout: int = 10,
+    market_analysis: Optional[List[Any]] = None,
 ) -> AgentSnapshot:
     """
     Build AgentSnapshot dari:
@@ -34,6 +35,7 @@ def fetch_snapshot(
     - GET /api/open-positions   (posisi + leverage)
     - SQLite trade_closures     (realized PnL 7d / 30d, win rate)
     - SQLite runner_state       (last candle timestamps, error count)
+    - MarketScanner             (live scanner analysis for all assets)
     """
     now = datetime.now(tz=timezone.utc)
 
@@ -112,6 +114,7 @@ def fetch_snapshot(
         ts                  = now,
         account             = acct,
         positions           = positions,
+        market_analysis     = market_analysis or [],
         last_candle_ts      = last_candle_ts,
         runner_error_count  = runner_error_count,
         treasury_usdt       = treasury_usdt,
