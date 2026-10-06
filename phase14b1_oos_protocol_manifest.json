@@ -1,0 +1,92 @@
+{
+  "assets": [
+    "BTC_USDT",
+    "ETH_USDT",
+    "SOL_USDT",
+    "BNB_USDT",
+    "XRP_USDT",
+    "AVAX_USDT",
+    "LINK_USDT",
+    "DOGE_USDT",
+    "ADA_USDT",
+    "LTC_USDT",
+    "AAVE_USDT",
+    "SUI_USDT"
+  ],
+  "benchmark_definitions": {
+    "always_long": "LONG on every active candidate evaluation timestamp",
+    "always_short": "SHORT on every active candidate evaluation timestamp",
+    "random": "Random LONG/SHORT choice per evaluation timestamp with seed 42"
+  },
+  "bootstrap_configuration": {
+    "confidence_level": 95.0,
+    "num_resamples": 1000,
+    "random_seed": 42
+  },
+  "cost_model": {
+    "adverse_roundtrip_pct": 0.25,
+    "base_roundtrip_pct": 0.14,
+    "optimistic_roundtrip_pct": 0.06
+  },
+  "decision_criteria": {
+    "COST_SENSITIVE": "Gross paired edge > 0 but net expectancy <= 0 under BASE cost scenario",
+    "INSUFFICIENT_OOS_EVIDENCE": "Total usable OOS observations < minimum_evaluation_observations",
+    "NO_INCREMENTAL_EDGE": "Paired mean difference vs Always LONG <= 0",
+    "OOS_POSITIVE_BUT_NOT_SIGNIFICANT": "Positive paired mean difference vs Always LONG but 95% Bootstrap CI includes 0",
+    "STATISTICALLY_SUPPORTED_EDGE": "Genuinely independent OOS data AND positive paired mean difference vs Always LONG AND 95% Bootstrap CI lower bound > 0 AND net expectancy > 0 under BASE cost scenario"
+  },
+  "evaluation_horizons": [
+    "T+1",
+    "T+3",
+    "T+6"
+  ],
+  "failure_conditions": [
+    "DATA_OVERLAP",
+    "UNAUTHORIZED_STRATEGY_MUTATION",
+    "PROTOCOL_SHA256_MISMATCH",
+    "INSUFFICIENT_WARMUP",
+    "LOOKAHEAD_LEAKAGE",
+    "MISSING_CANONICAL_ASSET"
+  ],
+  "historical_boundary": "2026-10-06T00:00:00Z",
+  "horizon_safety_candles": 6,
+  "manifest_created_at": "2026-10-06T07:35:46.536252+00:00",
+  "minimum_evaluation_observations": 100,
+  "missing_data_policy": "FAIL_CLOSED on missing assets, gaps > 4H, non-monotonic timestamps, or invalid OHLC",
+  "oos_start_rule": "new_first_timestamp > 2026-10-06T00:00:00Z",
+  "outcome_definitions": {
+    "candle_indexing": "Strict close-to-close forward return based on completed 4H candles",
+    "formula": "(close[t+h] - close[t]) / close[t]",
+    "horizon_map": {
+      "T+1": 1,
+      "T+3": 3,
+      "T+6": 6
+    },
+    "return_type": "Arithmetic fractional return"
+  },
+  "paired_comparison_method": {
+    "observation_level": "Exact matching asset and timestamp observation",
+    "paired_diff_formula": "candidate_return - benchmark_return"
+  },
+  "phase": "14B.1",
+  "primary_horizon": "T+3",
+  "primary_metrics": [
+    "paired_mean_diff_vs_always_long",
+    "bootstrap_95_ci_vs_always_long",
+    "net_expectancy_base_cost",
+    "directional_accuracy",
+    "profit_factor"
+  ],
+  "protocol_sha256": "473a3be30daa2e4820c816169d5111753e3562b0f781cc9269751b3a549d4f36",
+  "protocol_status": "FROZEN",
+  "protocol_version": "1.0.0-FROZEN",
+  "secondary_metrics": [
+    "paired_mean_diff_vs_always_short",
+    "bootstrap_probability_diff_gt_zero",
+    "conflict_subgroup_expectancy",
+    "regime_breakdown_expectancy",
+    "breakeven_roundtrip_cost"
+  ],
+  "timeframe": "4H",
+  "warmup_candles": 90
+}

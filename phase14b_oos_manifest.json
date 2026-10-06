@@ -1,0 +1,120 @@
+{
+  "dataset_id": "OOS_4H_20261006_073833",
+  "phase": "14B",
+  "acquisition_timestamp": "2026-10-06T07:38:33.489049+00:00",
+  "timeframe": "4h",
+  "assets": [
+    "BTC_USDT",
+    "ETH_USDT",
+    "SOL_USDT",
+    "BNB_USDT",
+    "XRP_USDT",
+    "AVAX_USDT",
+    "LINK_USDT",
+    "DOGE_USDT",
+    "ADA_USDT",
+    "LTC_USDT",
+    "AAVE_USDT",
+    "SUI_USDT"
+  ],
+  "validation_status": "FAIL",
+  "classification": "INSUFFICIENT_OOS_DATA",
+  "total_new_candles": 12,
+  "usable_oos_observations": 0,
+  "min_required_oos_candles": 100,
+  "overlap_detected": false,
+  "integrity_passed": true,
+  "failure_reasons": [
+    "Usable OOS observations (0) below required threshold (100)"
+  ],
+  "asset_boundaries": {
+    "BTC_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "db1ce5b9bf9b79b33fdcc938bcdffd2b9f724711f2a24c2941a6e2086aabd86a"
+    },
+    "ETH_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "814b8839ca6bc809a02fe60f13e73b6ba63ee4e3696049595c056c87813d73bc"
+    },
+    "SOL_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "82a0c8dfccbddb8dfea0395126ec30974394416992232338182a6b0f6b3aa099"
+    },
+    "BNB_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "d0dcb4295e80138afea3039a79ef9a95cb07a42316ead8a3c398d4d1ed5aac65"
+    },
+    "XRP_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "2842bf9e61e72d40fd9190bd0b768ec2ea5621fdcce89ee27ddf80613361ff88"
+    },
+    "AVAX_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "95546698cf3c98f3a61a4c5d708c572760f80f101f9f37d9a491890ff40c3a41"
+    },
+    "LINK_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "b4d51de451203827d65d8be8d26ebf17ffd530dc6ef56f1bbf56040fed479751"
+    },
+    "DOGE_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "ab9201828075166527b8bc7653da8b5875a2dd50ab4ad8b6295b36c4ec849871"
+    },
+    "ADA_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "83acc4525c2410e5e0167b0142ed75fe0a27e11d4da529e31be6052b23f86c7e"
+    },
+    "LTC_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "4b182a632a335589ca88d4a36224e9d10eff88f1ed5aa8bffe42e830da00b446"
+    },
+    "AAVE_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "c7de600498770553414c4cd85aa2b48ff73f7f8dcb9558fa8b62e3ae94746644"
+    },
+    "SUI_USDT": {
+      "candles": 1,
+      "first_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T04:00:00Z",
+      "sha256": "94775864bb107297f1a0cca042abd0ff504ec0e802c73376d5233aac35cc0e4e"
+    }
+  },
+  "asset_hashes": {
+    "BTC_USDT": "db1ce5b9bf9b79b33fdcc938bcdffd2b9f724711f2a24c2941a6e2086aabd86a",
+    "ETH_USDT": "814b8839ca6bc809a02fe60f13e73b6ba63ee4e3696049595c056c87813d73bc",
+    "SOL_USDT": "82a0c8dfccbddb8dfea0395126ec30974394416992232338182a6b0f6b3aa099",
+    "BNB_USDT": "d0dcb4295e80138afea3039a79ef9a95cb07a42316ead8a3c398d4d1ed5aac65",
+    "XRP_USDT": "2842bf9e61e72d40fd9190bd0b768ec2ea5621fdcce89ee27ddf80613361ff88",
+    "AVAX_USDT": "95546698cf3c98f3a61a4c5d708c572760f80f101f9f37d9a491890ff40c3a41",
+    "LINK_USDT": "b4d51de451203827d65d8be8d26ebf17ffd530dc6ef56f1bbf56040fed479751",
+    "DOGE_USDT": "ab9201828075166527b8bc7653da8b5875a2dd50ab4ad8b6295b36c4ec849871",
+    "ADA_USDT": "83acc4525c2410e5e0167b0142ed75fe0a27e11d4da529e31be6052b23f86c7e",
+    "LTC_USDT": "4b182a632a335589ca88d4a36224e9d10eff88f1ed5aa8bffe42e830da00b446",
+    "AAVE_USDT": "c7de600498770553414c4cd85aa2b48ff73f7f8dcb9558fa8b62e3ae94746644",
+    "SUI_USDT": "94775864bb107297f1a0cca042abd0ff504ec0e802c73376d5233aac35cc0e4e"
+  },
+  "manifest_sha256": "a7d04008be6a78c82838793d9bd32e07dfb05873f917def3c03ab55597ac0940",
+  "frozen": false
+}
