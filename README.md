@@ -8,7 +8,7 @@
 
 **Autonomous AI-Powered Cryptocurrency Futures Trading System & Quantitative Signal Research Platform**
 
-[![Status](https://img.shields.io/badge/Status-Phase%2013%20Shadow%20Observation-blue)]()
+[![Status](https://img.shields.io/badge/Status-Phase%2014B.2%20Collecting%20OOS%20Data-blue)]()
 [![Exchange](https://img.shields.io/badge/Exchange-Gate.io%20Futures-green)]()
 [![Python](https://img.shields.io/badge/Python-3.11%2B-brightgreen)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow)]()
@@ -16,13 +16,35 @@
 
 Astel Research - TradingAgents is an autonomous AI trading system and quantitative research platform combining **machine learning predictions**, **multi-horizon market features**, **regime-conditioned signal fusion**, **episodic memory**, **procedural memory**, **LLM reasoning**, and a **self-reflection feedback loop** for cryptocurrency futures markets.
 
-The system operates continuously, conducting empirical historical replay, regime-conditioned research, and read-only shadow observation to evaluate candidate signal architectures before any execution consideration.
+The system operates continuously, conducting empirical historical replay, regime-conditioned research, read-only shadow observation, and continuous independent out-of-sample data collection before any execution consideration.
 
 **Creator & Lead Researcher:** [Azis Maulana Suhada](https://raydenfly.my.id)  
-**Developed by:** PT Authentic Media Servicex  
+**Developed by:** PT Authentic Media Services by AMS Capital  
 **Research Areas:** Autonomous AI Agents • Quantitative Trading • Machine Learning • Multi-Agent Systems • Large Language Models (LLMs)
 
 ---
+
+## Current Status
+
+> ### 🟢 CURRENT STATUS: COLLECTING INDEPENDENT OOS DATA (PHASE 14B.2)
+>
+> - **CandidateSignalV2**: **FROZEN** (Unmodified since Phase 12.9)
+> - **Phase 14B.1 Protocol**: **FROZEN** (`1.0.0-FROZEN`, SHA-256: `473a3be30daa2e4820c816169d5111753e3562b0f781cc9269751b3a549d4f36`)
+> - **Phase 14B.2 Collector**: **ACTIVE** (`agent/_phase14b_oos_collector.py`)
+> - **Phase 14C Execution**: **NOT EXECUTED** (Awaiting collection of required 196 raw 4H candles per asset)
+> - **Historical Alpha Claim**: **NOT ESTABLISHED** (Historical replay edge does not constitute independent OOS alpha proof)
+> - **Independent OOS Evidence**: **INSUFFICIENT** until collection completes
+
+### Current Operational & Research Stage
+
+The repository is actively executing **Phase 14B.2 — Continuous Independent OOS Data Collection**.
+
+Independent post-boundary 4H market candlesticks are being continuously accumulated across the canonical 12-asset universe (`BTC`, `ETH`, `SOL`, `BNB`, `XRP`, `AVAX`, `LINK`, `DOGE`, `ADA`, `LTC`, `AAVE`, `SUI`).
+
+All statistical decision thresholds, benchmark definitions, transaction cost models, and CandidateSignalV2 strategy rules remain 100% frozen.
+
+---
+
 ## Overview
 
 Astel Research - TradingAgents is built on the philosophy that successful autonomous trading requires a multi-layered quantitative and cognitive architecture:
@@ -41,7 +63,7 @@ Feature Engineering
     │
     ├── Machine Learning
     │
-    └── Candidate Signal V2
+    └── Candidate Signal V2 (FROZEN)
               │
               ▼
        Regime Detection
@@ -76,377 +98,172 @@ Feature Engineering
               Gate.io Testnet
 ```
 
-> **Current Research Safety State**
+> **Research Safety & Execution Isolation**
 >
-> Candidate V2 validation is currently conducted in strictly isolated SHADOW mode. Phase 13 does not submit exchange orders. Production/Testnet execution is not enabled by the Candidate V2 research pipeline.
+> Candidate V2 evaluation is currently conducted in strictly isolated SHADOW / RESEARCH mode. Candidate V2 does not submit exchange orders (`EXECUTION_MODE=SHADOW` enforced).
 
 ---
 
-## Current Status
+## Frozen CandidateSignalV2 Strategy Specification
 
-### Current Research Phase
+CandidateSignalV2 is **FROZEN** and has remained completely unmodified since Phase 12.9.
 
-**Phase 13 — Candidate V2 Real-Time Shadow Observation**
+### 1. Regime Mapping Rules
+- **BULLISH_TREND** → Multi-Horizon Momentum
+- **BEARISH_TREND** → Mean-Reversion
+- **CONSOLIDATION** → Multi-Horizon Momentum
+- **HIGH_VOLATILITY** → NEUTRAL (No trade)
 
-Status: **✅ Complete — Internal Shadow Validation**
+### 2. Conflict Resolution Rule (`FOLLOW_MOMENTUM`)
+When Mean-Reversion and Momentum indicators generate opposing signals:
+- `MR_SHORT` + `MOM_LONG` → Follow Momentum **LONG**
+- `MR_LONG` + `MOM_SHORT` → Follow Momentum **SHORT**
 
-Candidate V2 has been evaluated in a strictly isolated, read-only shadow framework using completed 4H candle observations across 12 assets.
+### 3. Indicator Definitions
+- **Normal Mean-Reversion**:
+  - **LONG**: `RSI14 < 35` AND `Bollinger %B < 0.10`
+  - **SHORT**: `RSI14 > 65` AND `Bollinger %B > 0.90`
+- **Normal Multi-Horizon Momentum**:
+  - **LONG**: `ret_3 > 0` AND `ret_6 > 0` AND `ret_12 > 0`
+  - **SHORT**: `ret_3 < 0` AND `ret_6 < 0` AND `ret_12 < 0`
 
-**Important Operational Status**:
-- Strategy rules remain completely frozen.
-- Shadow execution only (`EXECUTION_MODE=SHADOW` enforced).
-- No exchange orders submitted (0 GateExecutor / ExecutionEngine order calls).
-- Candidate V2 is **NOT** production-ready.
-- Candidate V2 is **NOT** independently out-of-sample validated yet.
+> These parameter thresholds are frozen for out-of-sample validation and must not be tuned or optimized.
 
-### Phase 13 Headline Metrics
+---
 
-| Metric | Value |
+## Historical Research vs. Independent Out-of-Sample Validation
+
+It is a critical quantitative research principle in Astel to strictly distinguish between **Historical In-Sample Replay** and **Independent Out-of-Sample (OOS) Validation**.
+
+### Historical Replay Dataset (Phases 12.4–14.0)
+- **Universe**: 12 Canonical USDT-margined futures contracts
+- **Timeframe**: 4H
+- **Sample Size**: 1,001 candles per asset (12,012 total bar evaluations)
+- **Historical Boundary**: `2026-10-06T00:00:00Z`
+- **Warmup Window**: 90 candles
+- **Forward Horizons**: T+1, T+3, T+6 (Primary Horizon: **T+3**)
+
+### Historical Phase 12.9 / Phase 14.0 Findings
+
+| Metric / Scenario | Historical Value |
 |---|---:|
-| Observed Assets | 12 |
-| Timeframe | 4H |
-| Historical Bar Evaluations | 10,920 |
-| Active Candidate V2 Observations | 3,910 |
-| Candidate V2 Coverage | 35.92% |
-| Candidate V2 T+3 Expectancy | +0.2148% |
-| Candidate V2 Directional Accuracy | 47.62% |
-| Candidate V2 Profit Factor | 1.30 |
-| Candidate V2 Payoff Ratio | 1.42 |
-| Conflict FOLLOW_MOMENTUM Observations | 1,620 |
-| Conflict FOLLOW_MOMENTUM T+3 Expectancy | +0.3440% |
-| Conflict FOLLOW_MOMENTUM Profit Factor | 1.45 |
-| MR_SHORT_MOM_LONG T+3 Expectancy / PF | +0.7299% / 2.00 |
-| MR_LONG_MOM_SHORT T+3 Expectancy / PF | -0.0778% / 0.90 |
-| Execution Safety Audit | PASS |
-| Unit Test Suite | 14/14 PASS |
+| Candidate V2 Gross T+3 Expectancy | +0.2141% |
+| Always LONG Benchmark Expectancy | +0.2073% |
+| Paired Expectancy Difference ($\delta$) | +0.0068% (+0.68 bps) |
+| Paired 95% Bootstrap Confidence Interval | [-0.0693%, +0.0893%] |
+| Probability Difference > 0 | 58.7% |
+| Optimistic Cost Scenario (0.06% round-trip) | Net +0.1541%, Profit Factor 1.21 |
+| Base Cost Scenario (0.14% round-trip) | Net +0.0741%, Profit Factor 1.09 |
+| Adverse Cost Scenario (0.25% round-trip) | Net -0.0359%, Profit Factor 0.96 |
 
-### Research Interpretation
-
-> Phase 13 produced encouraging positive shadow/historical results, particularly for the conflict resolution path where momentum overrides mean-reversion signals. However, these results are not yet sufficient to establish independent statistical alpha because the observation dataset overlaps with the historical dataset used during Candidate V2 development and rule freezing.
+> **Methodological Conclusion**: The historical replay dataset overlapped with the market period used to formulate and freeze Candidate V2. Therefore, these historical results **DO NOT constitute independent out-of-sample alpha evidence**. CandidateSignalV2 does NOT have statistically proven alpha.
 
 ---
 
-## Research & Validation Status
+## Phase 14B.1 — Frozen Independent OOS Protocol
 
-The project follows a rigorous, multi-stage quantitative validation pipeline:
+Phase 14B.1 established a machine-readable, immutable validation protocol prior to independent OOS data collection.
 
-```text
-Historical Research
-      ↓
-Signal Research
-      ↓
-Candidate V1
-      ↓
-Regime-Conditioned Research
-      ↓
-Candidate V2
-      ↓
-Internal Walk-Forward Validation
-      ↓
-Phase 13 Shadow Observation
-      ↓
-Phase 14 Independent OOS + Cost Audit
-      ↓
-Future Testnet Readiness Audit
-```
+### Protocol Specifications
+- **Protocol Version**: `1.0.0-FROZEN`
+- **Protocol Manifest SHA-256**: `473a3be30daa2e4820c816169d5111753e3562b0f781cc9269751b3a549d4f36`
+- **Historical Boundary**: `2026-10-06T00:00:00Z`
+- **OOS Inclusion Rule**: `new_first_timestamp > 2026-10-06T00:00:00Z`
+- **Universe & Timeframe**: 12 canonical assets, 4H timeframe
+- **Evaluation Window**: 90 warmup candles + 100 evaluation observations + 6 horizon safety candles
+- **Benchmark Set**:
+  - Always LONG
+  - Always SHORT
+  - Uniform Random
+- **Methodological Break Note**: The historical Phase 12/14 diagnostic benchmark included `REGIME_SWITCH_V1`. Phase 14B.1 replaces this with `Always LONG`, `Always SHORT`, and `Random`. Historical comparisons against `REGIME_SWITCH_V1` are not directly interchangeable with the frozen Phase 14C benchmark set.
+- **Statistical Inference**: 1,000 paired bootstrap resamples, 95% percentile confidence intervals, deterministic seed `42`.
+- **Trading Cost Scenarios**:
+  - Optimistic: 0.06% round-trip
+  - Base: 0.14% round-trip
+  - Adverse: 0.25% round-trip
 
-The system strictly separates:
-1. **Signal Discovery** — Identifying candidate market features without lookahead.
-2. **Historical Validation** — Multi-regime historical replay across multi-month datasets.
-3. **Shadow Observation** — Read-only, real-time observation of frozen candidate rules.
-4. **Independent Out-of-Sample Validation** — Testing frozen rules on chronologically un-seen market periods.
-5. **Transaction-Cost Validation** — Modeling fees, slippage, and spread drag.
-6. **Testnet Readiness** — Verifying API connection stability and risk guards under zero live capital.
-7. **Live Deployment Readiness** — Strict decision gates required before any live capital allocation.
-
-Positive historical expectancy alone does not qualify the system for live execution.
+> **Protocol Immutability Guarantee**: The Phase 14B.1 protocol manifest is frozen and SHA-256 fingerprinted. It must not be modified or adjusted based on post-hoc OOS observations.
 
 ---
 
-## Quantitative Research Progress
+## Phase 14B.2 — Continuous Independent OOS Data Collector
 
-Phase 12 transitioned Astel from a general autonomous trading architecture into a measurable, data-driven quantitative research pipeline.
+The Phase 14B.2 continuous collector safely and deterministically acquires newly completed 4H candlesticks from Gate.io REST API into an isolated OOS dataset directory (`quant_system/data/oos/`).
 
-### Phase 12-13 Key Findings
+### Infrastructure Modules
+- **Data Collector**: `agent/_phase14b_oos_collector.py`
+- **Health & Status Validator**: `agent/_phase14b_oos_health.py`
 
-- **Multi-Asset Replay**: Expanded historical dataset to 12 assets, 4H timeframe, 12,000 candles total (~5.5 months), covering 43.11% Bullish, 44.62% Bearish, and 12.26% Consolidation regimes.
-- **Directional Bias Audit**: Proved that initial 100% LONG bias in early phases was caused by short bullish sample windows rather than pipeline flaws.
-- **Baseline Feature Audit**: Audited the initial heuristic formula (`ema_dist * 2.0 + ret_1 * 0.5`) and classified it as `NO_SIGNAL` / `MISLEADING_SIGNAL` due to unstable predictive relationships.
-- **Candidate V1 Architecture**: Implemented `CandidateSignalV1` combining Mean-Reversion (`RSI14`, `Bollinger %B`) and Multi-Horizon Momentum (`ret_3`, `ret_6`, `ret_12`). Showed that requiring simultaneous agreement produced 0 high-consistency signals due to structural indicator contradiction (deep oversold dips naturally coincide with negative recent returns).
-- **Regime-Conditioned Switching**: Identified that Mean-Reversion performs best in Bearish trends (60.25% accuracy), while Multi-Horizon Momentum excels in Bullish trends and Consolidation.
-- **Frozen Candidate V2**: Developed `CandidateSignalV2` based on regime-conditioned switching and explicit conflict resolution (`FOLLOW_MOMENTUM`).
-
-### Frozen Candidate V2 Architecture
-
-**Regime Mapping**:
-- **Bullish Trend** → Multi-Horizon Momentum
-- **Bearish Trend** → Mean Reversion
-- **Consolidation** → Multi-Horizon Momentum
-- **High Volatility** → Neutral
-
-**Conflict Resolution Rule**:
-When Mean-Reversion and Momentum conflict:
-- `MR_SHORT` + `MOM_LONG` → follow momentum **LONG**
-- `MR_LONG` + `MOM_SHORT` → follow momentum **SHORT**
-
-**Signal Definitions**:
-- **Mean Reversion**: `RSI14 < 35 & %B < 0.10` → LONG; `RSI14 > 65 & %B > 0.90` → SHORT.
-- **Momentum**: `ret_3 > 0 & ret_6 > 0 & ret_12 > 0` → LONG; `ret_3 < 0 & ret_6 < 0 & ret_12 < 0` → SHORT.
-
-> These rules are frozen for validation and should not be interpreted as proven optimal parameters.
+### Operational Properties
+- **Supported Modes**: `--once` (single cycle) or `--watch --interval 3600` (hourly continuous polling).
+- **Completed-Candle Invariant**: `now_sec >= candle_start_sec + 14400` (Enforces zero lookahead).
+- **Strict Invariants**: UTC timestamps, 4H step alignment, strict monotonicity, rejection of duplicates and overlapping historical batches, atomic `.tmp` file persistence.
+- **Fail-Closed Design**: Rejects malformed API responses; never executes Phase 14C automatically.
 
 ---
 
-## Phase 13 — Candidate V2 Shadow Observation
+## OOS Dataset Readiness Requirements
 
-| Metric | Result |
-|---|---:|
-| Assets | 12 |
-| Timeframe | 4H |
-| Historical evaluations | 10,920 |
-| Active observations | 3,910 |
-| Coverage | 35.92% |
-| Accuracy | 47.62% |
-| T+3 expectancy | +0.2148% |
-| Profit Factor | 1.30 |
-| Payoff Ratio | 1.42 |
-| Conflict observations | 1,620 |
-| Conflict expectancy | +0.3440% |
-| Conflict PF | 1.45 |
-| Execution mode | SHADOW |
-| Order calls | 0 |
-| Tests | 14/14 |
+To satisfy the frozen Phase 14B.1 protocol, each canonical asset requires:
 
-> The strongest conflict asymmetry was observed when the mean-reversion layer indicated overbought/SHORT while multi-horizon momentum remained bullish. `MR_SHORT_MOM_LONG` produced +0.7299% mean T+3 return with PF 2.00 in the internal observation dataset. The opposite conflict direction (`MR_LONG_MOM_SHORT`) produced -0.0778% with PF 0.90.
+$$\text{Raw Completed 4H Candles Required} = 90 \text{ Warmup} + 100 \text{ Evaluation} + 6 \text{ Horizon Safety} = \mathbf{196 \text{ Candles}}$$
 
-> **Disclaimer**: These results are research observations, not proof of independent trading alpha. The Phase 13 dataset overlaps with data used during Candidate V2 development and freezing.
+> **Important Data Distinction**: $196$ is the **RAW COMPLETED CANDLE REQUIREMENT** per asset. It MUST NOT be conflated as $196$ independent statistical evaluation observations. The actual evaluation sample size per asset is $N=100$.
+
+Initial collection baseline: 12 total candles (1 candle per asset, 0 usable evaluation observations). The system is NOT eligible to execute Phase 14C until the complete 196 candle threshold is satisfied across all 12 canonical assets.
 
 ---
 
-## Core Components
+## Phase 14C-Prep.1 — Statistical Robustness & Methodology Audit
 
-### AutonomousAgent
+Phase 14C-Prep.1 was a strictly read-only quantitative methodology audit of the statistical protocol prior to Phase 14C.
 
-The central orchestrator that runs a continuous loop (default: every 300 seconds). Each tick performs market snapshot, analyst evaluation, plan generation (rule-based + LLM), guardrail checking, execution, memory recording, and reflection.
+### Key Audit Findings & Corrected Power Analysis
+Using first-principles analytical $Z$-test calculations ($\sigma = 0.02$, two-sided $\alpha = 0.05$):
 
-- **Mode**: `observe` (monitor only) or `execute` (submit orders)
-- **Survival Mode**: NORMAL → CONSERVATIVE → DEFENSIVE → HIBERNATE
-- **Treasury Management**: Tracks capital, deducts operational costs, manages runway
+| True Paired Mean Edge ($\delta$) | $N=100$ (Nominal Eval N) | Hypothetical Statistical $N=196$ Scenario | Illustrative $N_{\text{eff}} \approx 50$ Scenario |
+|---|---:|---:|---:|
+| **$0.02\%$ ($2$ bps)** | $5.11\%$ | $5.22\%$ | $5.06\%$ |
+| **$0.05\%$ ($5$ bps)** | $5.71\%$ | $6.42\%$ | $5.36\%$ |
+| **$0.10\%$ ($10$ bps)** | $7.90\%$ | $10.97\%$ | $6.45\%$ |
+| **$0.20\%$ ($20$ bps)** | **$17.01\%$** | $28.71\%$ | $11.13\%$ |
 
-### ExecutionEngine
-
-A unified, fault-tolerant order execution wrapper that delegates to GateExecutor. Every order passes through:
-
-1. **Dedup Cache** — 5-second TTL prevents duplicate order submission
-2. **Risk Callback** — Pre-execution validation via Guardrails
-3. **Rate Limiter** — Maximum 5 requests/second
-4. **Retry with Backoff** — Up to 3 attempts with exponential backoff
-5. **Storage Callback** — Every order stored in `agent_orders` table
-
-Supports SIMULATION, TESTNET, and LIVE modes with identical code paths.
-
-### GateExecutor
-
-Direct Gate.io Futures API client supporting:
-
-- Market orders (BUY/SELL)
-- Limit orders
-- TP/SL trigger orders (reduce-only)
-- Position queries and reconciliation
-- Leverage management
-- Candlestick data fetching
-- Account equity queries
-
-### MemoryContextBuilder
-
-**Phase 9.1** — Builds rich context for LLM reasoning by aggregating:
-
-- Current market snapshot
-- Survival mode and treasury state
-- Procedural memory rules
-- Shadow memory influence scores
-- Recent episode outcomes
-- Memory attribution data
-
-### ReasoningValidator
-
-**Phase 9.2** — Audits every LLM plan for:
-
-- Memory usage score (did the LLM consider memory?)
-- Context size and latency
-- Which memory dimensions were used (procedural, episodic, shadow, ML, portfolio, risk, treasury)
-- Raw reasoning content analysis
-
-### ReasoningFeedbackEngine
-
-**Phase 9.3** — Stores feedback from reasoning audits and builds a feedback prompt that is injected into the next LLM call. Creates a continuous self-reflection loop.
-
-### TradeRecorder
-
-**Phase 10.5** — The AI Flight Recorder. Records every stage of every trade as a structured timeline with standard metadata. Thread-safe with per-trade locks.
+> **Power Analysis Takeaways**:
+> 1. Under nominal $N=100$, statistical power to detect a $20$ bps ($0.20\%$) mean edge is **$17.01\%$** (not high power).
+> 2. Achieving $80\%$ power at nominal $N=100$ requires a mean edge of $\delta = \mathbf{0.560\%}$ ($56$ bps per trade).
+> 3. $N=196$ in statistical power tables is explicitly a **HYPOTHETICAL STATISTICAL SAMPLE-SIZE SCENARIO**, not the raw completed candle count.
+> 4. $N_{\text{eff}} \approx 50$ is an **illustrative AR(1)-based sensitivity scenario** ($\rho_1 = 0.33$), not an empirical property of CandidateSignalV2 OOS returns.
+> 5. Moving Block Bootstrap CI widening (+18.68% under synthetic AR(1)) represents a controlled simulation stress test demonstrating theoretical dependence sensitivity.
 
 ---
 
-## AI Memory Architecture
+## Phase 14B.2 Integrity & Phase 14C Dry-Run Audit
 
-Astel Research - TradingAgents implements a multi-layered memory system inspired by cognitive architectures:
+A hardening pass verified collector invariants and Phase 14C fail-closed dry-run behavior using synthetic fixtures:
 
-### Procedural Memory (Phase 7D.1)
-Stores validated trading rules extracted from successful patterns. Rules are injected as context into LLM prompts.
-
-### Episodic Memory (Phase 7A)
-Records every action as an episode with full context: market state, decision, outcome, and importance score.
-
-### Shadow Memory (Phase 2 + 8.1)
-A read-only comparator that observes agent decisions without interference. Influence scores measure alignment with memory recommendations.
-
-### Memory Mining & Pattern Validation (Phase 7C)
-`MemoryMiner` extracts recurring patterns from resolved episodes; `PatternValidator` scores statistical significance.
-
-### Memory Attribution (Phase 7D.2)
-Tracks which memory rules influenced decisions and whether those decisions led to positive or negative outcomes.
+- **Collector Invariants**: Verified candle completion, timestamp monotonicity, OHLCV validity, canonical asset coverage, gap detection, duplicate rejection, atomic persistence, and restartability.
+- **Fail-Closed Dry-Run Suite** (`agent/test_phase14c_dryrun.py`): Verified 10 synthetic edge-case scenarios (insufficient $N$, protocol SHA mismatch, historical overlap, duplicate timestamps, missing assets, incomplete candles, valid dry-run, cost sensitivity).
+- **Determinism Verification**: Confirmed exact deterministic equality (`RUN_1 == RUN_2`) across bootstrap resamples using seed `42`.
+- **Regression Suite**: **88/88 tests passing** across all repository Phase 14 test suites.
 
 ---
 
-## Roadmap
+## Pre-Phase-14C Repository Cleanup Status
 
-### Completed Phases
-
-| Phase | Description |
-|---|---|
-| Phase 1-4 | Base agent loop, Shadow comparator, Analyst team, Bull/Bear research |
-| Phase 5 | ML model integration, feature engineering, prediction pipeline |
-| Phase 6 | Experiment tracking, survival mode, treasury management |
-| Phase 7A-7D | Episodic memory, memory mining, pattern validation, memory attribution |
-| Phase 8 | Shadow memory influence |
-| Phase 9.1-9.3 | Memory context builder, reasoning validator, reasoning feedback |
-| Phase 10 | ExecutionEngine, GateExecutor, order management |
-| Phase 10.5 | Trade Replay / AI Flight Recorder |
-| Phase 10.5B-10.5C | Replay storage and runtime integration |
-| Phase 10.6 | Operational validation, smoke test, execution audit |
-| Phase 10.6C | Execution unification / single execution owner |
-| Phase 10.6D | Gate.io Testnet readiness audit |
-| Phase 10.7 | Launch package and observation infrastructure |
-| Phase 10.7B | Replay-backed dashboard closures and recent closure analysis |
-| Phase 11 | Market pipeline tracing and current-position migration |
-| Phase 12.0 | Multi-asset live market scanner |
-| Phase 12.1 | Market Intelligence Layer |
-| Phase 12.2 | Multi-Agent Market Decision & Evidence Fusion |
-| Phase 12.3 | Decision Calibration, Historical Replay & Shadow Validation |
-| Phase 12.3A-12.3G | Historical validation, evidence integrity, directional bias audits |
-| Phase 12.4 | Historical Dataset Expansion & Multi-Regime Validation |
-| Phase 12.4A | Edge Attribution & Regime Performance Analysis |
-| Phase 12.5 | Signal Predictive Value & Calibration Readiness |
-| Phase 12.6 | Feature Research & Candidate Signal Architecture |
-| Phase 12.7 | Candidate Signal V1 Implementation & Shadow Replay |
-| Phase 12.8 | Regime-Conditioned Signal Research |
-| Phase 12.9 | Candidate V2 Frozen Rules & Walk-Forward Validation |
-| Phase 13 | Candidate V2 Real-Time Shadow Observation |
-
-### Upcoming Research Phases
-
-| Phase | Description |
-|---|---|
-| Phase 14 | Independent OOS Validation, Paired Edge Analysis & Trading-Cost Audit |
-| Phase 15 | Production Readiness / Risk Guard Audit |
-| Future | Gate.io Testnet Controlled Execution |
-| Future | Live Deployment — only after independent validation and readiness gates |
+A minimal, reversible pre-Phase-14C cleanup was executed:
+- **13 redundant artifacts** (legacy Phase 8 audit scripts, one-off branding/fix scripts, informal notes, and temporary test DBs) were moved to `archive/pre-phase14c/`.
+- **2 database files** (`agent/agent.sqlite`, `agent/test_fusion.sqlite`) were retained in place due to default fallback references.
+- Documentation report produced: `PRE_PHASE14C_CLEANUP_REPORT.md`.
 
 ---
 
-## Project Structure
+## Next Methodological Milestones
 
-```text
-Astel Research - TradingAgents/
-│
-├── live_runner.py              # Runtime launcher (single entry point)
-├── requirements.txt            # Python dependencies
-├── .env                        # Environment configuration
-├── README.md                   # System documentation
-│
-├── agent/                      # AI Agent & Research subsystem
-│   ├── agent.py                # AutonomousAgent main loop
-│   ├── candidate_signal.py     # CandidateSignalV1 engine (Phase 12.7)
-│   ├── candidate_signal_v2.py  # Frozen CandidateSignalV2 engine (Phase 12.9)
-│   ├── candidate_v2_shadow_engine.py # Phase 13 Real-Time Shadow Engine
-│   ├── regime_signal_research.py     # Regime research engine (Phase 12.8)
-│   ├── historical_replay.py    # Historical replay engine
-│   ├── market_intelligence.py  # Market intelligence layer
-│   ├── market_scanner.py       # Multi-asset scanner
-│   ├── specialists.py          # Technical, ML & OrderFlow specialists
-│   ├── evidence_fusion.py      # Multi-agent decision fusion engine
-│   ├── calibration.py          # Signal calibration engine
-│   ├── guardrails.py           # Guardrails, rate limiter, circuit breaker
-│   ├── llm_client.py           # LLM Router (Groq/Ollama/DeepSeek)
-│   ├── memory.py               # Episode resolver
-│   ├── memory_miner.py         # Pattern mining
-│   ├── memory_context.py       # Memory context builder
-│   ├── trade_replay.py         # TradeRecorder / AI Flight Recorder
-│   └── ...
-│
-├── quant_system/               # Quantitative subsystem
-│   ├── config.yaml             # Main configuration
-│   ├── execution/
-│   │   ├── execution_engine.py # Fault-tolerant execution wrapper
-│   │   └── gate_executor.py    # Gate.io API client
-│   ├── features/
-│   │   └── build_features.py   # Feature engineering pipeline
-│   ├── model/
-│   │   └── predict.py          # ML prediction model
-│   └── risk/
-│       └── risk_manager.py     # Position sizing and risk
-│
-├── dashboard/                  # Web dashboard
-│   ├── app.py                  # FastAPI application
-│   └── ...
-│
-└── reports/                    # Generated research reports
-```
-
----
-
-## Installation & Setup
-
-### Prerequisites
-
-- **Python 3.11+**
-- **Ollama** (for local LLM inference)
-- **PostgreSQL** (optional, SQLite fallback available)
-- **Gate.io Testnet account**
-
-### Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```env
-GATE_API_KEY=your_testnet_api_key
-GATE_API_SECRET=your_testnet_api_secret
-AGENT_MODE=observe
-AGENT_STORAGE=sqlite
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_PRIMARY_MODEL=qwen2.5:7b
-```
-
----
-
-## Running Research Validation Scripts
-
-```bash
-# Run Phase 13 Real-Time Shadow Observation Harness:
-python -c "import sys; sys.path.insert(0, '.'); from agent._phase13_shadow_runner import run_phase13_shadow_observation; run_phase13_shadow_observation()"
-
-# Run Unit Tests for Shadow Observation Engine:
-python -m unittest agent/test_candidate_v2_shadow_engine.py
-
-# Run Unit Tests for Candidate V2 Logic:
-python -m unittest agent/test_candidate_signal_v2.py
-```
+1. **Continuous Collection**: Continue running `agent/_phase14b_oos_collector.py` until the canonical 12-asset universe reaches $\ge 196$ completed 4H candles per asset.
+2. **Health Verification**: Periodically inspect dataset integrity using `python -m agent._phase14b_oos_health`.
+3. **Readiness Gate Confirmation**: Confirm `ready_for_phase_14c: true` in `phase14b_oos_collector_manifest.json`.
+4. **Dataset Freeze**: Lock the eligible OOS dataset SHA-256 fingerprint.
+5. **Phase 14C Execution**: Execute Phase 14C out-of-sample validation strictly according to the frozen Phase 14B.1 protocol. Zero strategy tuning or post-hoc protocol modification permitted.
 
 ---
 
@@ -461,7 +278,7 @@ python -m unittest agent/test_candidate_signal_v2.py
 | LLM Framework | Ollama (local) • Groq (cloud) • DeepSeek (cloud) |
 | Exchange API | Gate.io Futures API v4 |
 | Data Validation | Pydantic v2 |
-| Unit Testing | Python Standard `unittest` |
+| Unit Testing | Python Standard `unittest` (88 Phase 14 Tests PASS) |
 
 ---
 

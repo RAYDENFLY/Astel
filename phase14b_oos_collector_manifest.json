@@ -18,11 +18,11 @@
     "AAVE_USDT",
     "SUI_USDT"
   ],
-  "dataset_id": "OOS_COLLECTOR_4H_20261006_074152",
-  "last_acquisition_timestamp": "2026-10-06T07:41:52.192729+00:00",
+  "dataset_id": "OOS_COLLECTOR_4H_20261006_170951",
+  "last_acquisition_timestamp": "2026-10-06T17:09:51.479144+00:00",
   "status": "FAIL",
   "classification": "INSUFFICIENT_OOS_DATA",
-  "total_candles": 12,
+  "total_candles": 36,
   "usable_observations": 0,
   "required_eval_observations": 100,
   "independent": true,
@@ -33,103 +33,103 @@
   "ready_for_phase_14c": false,
   "asset_boundaries": {
     "BTC_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "db1ce5b9bf9b79b33fdcc938bcdffd2b9f724711f2a24c2941a6e2086aabd86a"
+      "sha256": "ad5bdac2d0a370f06323ae48806822abb072bbc4bbab431d185252d54cc8a3a8"
     },
     "ETH_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "814b8839ca6bc809a02fe60f13e73b6ba63ee4e3696049595c056c87813d73bc"
+      "sha256": "baa3f90e27aed6f534a24a5103ae86857d3f4cb027349b130595071af32efc0a"
     },
     "SOL_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "82a0c8dfccbddb8dfea0395126ec30974394416992232338182a6b0f6b3aa099"
+      "sha256": "1cbeb1b82ff84757c1e6d3408e8e28c9d664bc13b8d401cc1b5d059dfa881703"
     },
     "BNB_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "d0dcb4295e80138afea3039a79ef9a95cb07a42316ead8a3c398d4d1ed5aac65"
+      "sha256": "d62ee80cac9577ac2b0b8b9b657a0d8f19b766f24869155a654534fc97fafec5"
     },
     "XRP_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "2842bf9e61e72d40fd9190bd0b768ec2ea5621fdcce89ee27ddf80613361ff88"
+      "sha256": "be34acd556c52d631f8a58edeec08cd08218455ed805062f2b3939d2a1d610a7"
     },
     "AVAX_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "95546698cf3c98f3a61a4c5d708c572760f80f101f9f37d9a491890ff40c3a41"
+      "sha256": "4e89c3074c2e1c60a8fad7430fe5ad8f70a9ef8940145bccf89ffbd461572261"
     },
     "LINK_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "b4d51de451203827d65d8be8d26ebf17ffd530dc6ef56f1bbf56040fed479751"
+      "sha256": "6f5c0d317e0768381cf1336120d84243cb689594231017344d6a8f81dfbcbe5a"
     },
     "DOGE_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "ab9201828075166527b8bc7653da8b5875a2dd50ab4ad8b6295b36c4ec849871"
+      "sha256": "a7e08426d59d704f88aa3a3c461d7dc6147b723e8b58ef8ca5460cddcbde268a"
     },
     "ADA_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "83acc4525c2410e5e0167b0142ed75fe0a27e11d4da529e31be6052b23f86c7e"
+      "sha256": "f1e925f89ff231b7464921cfbeb2f2709d265faa4e0cb335add2158d90b59284"
     },
     "LTC_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "4b182a632a335589ca88d4a36224e9d10eff88f1ed5aa8bffe42e830da00b446"
+      "sha256": "6cbf5644d093a1f325bdbb1b58bbc92a2139467be8be43ce23db1b0fc7496cc1"
     },
     "AAVE_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "c7de600498770553414c4cd85aa2b48ff73f7f8dcb9558fa8b62e3ae94746644"
+      "sha256": "0860e8ec86602299eaa13a2094e7df2fb8ef6c82ae37f48bed9e32d0145af628"
     },
     "SUI_USDT": {
-      "total_candles": 1,
+      "total_candles": 3,
       "first_ts": "2026-10-06T04:00:00Z",
-      "last_ts": "2026-10-06T04:00:00Z",
+      "last_ts": "2026-10-06T12:00:00Z",
       "new_candles_this_cycle": 0,
-      "sha256": "94775864bb107297f1a0cca042abd0ff504ec0e802c73376d5233aac35cc0e4e"
+      "sha256": "16f6f979d441cef4e01653a5917da2a22cd124e18845718ce15c1315deca09c9"
     }
   },
   "asset_hashes": {
-    "BTC_USDT": "db1ce5b9bf9b79b33fdcc938bcdffd2b9f724711f2a24c2941a6e2086aabd86a",
-    "ETH_USDT": "814b8839ca6bc809a02fe60f13e73b6ba63ee4e3696049595c056c87813d73bc",
-    "SOL_USDT": "82a0c8dfccbddb8dfea0395126ec30974394416992232338182a6b0f6b3aa099",
-    "BNB_USDT": "d0dcb4295e80138afea3039a79ef9a95cb07a42316ead8a3c398d4d1ed5aac65",
-    "XRP_USDT": "2842bf9e61e72d40fd9190bd0b768ec2ea5621fdcce89ee27ddf80613361ff88",
-    "AVAX_USDT": "95546698cf3c98f3a61a4c5d708c572760f80f101f9f37d9a491890ff40c3a41",
-    "LINK_USDT": "b4d51de451203827d65d8be8d26ebf17ffd530dc6ef56f1bbf56040fed479751",
-    "DOGE_USDT": "ab9201828075166527b8bc7653da8b5875a2dd50ab4ad8b6295b36c4ec849871",
-    "ADA_USDT": "83acc4525c2410e5e0167b0142ed75fe0a27e11d4da529e31be6052b23f86c7e",
-    "LTC_USDT": "4b182a632a335589ca88d4a36224e9d10eff88f1ed5aa8bffe42e830da00b446",
-    "AAVE_USDT": "c7de600498770553414c4cd85aa2b48ff73f7f8dcb9558fa8b62e3ae94746644",
-    "SUI_USDT": "94775864bb107297f1a0cca042abd0ff504ec0e802c73376d5233aac35cc0e4e"
+    "BTC_USDT": "ad5bdac2d0a370f06323ae48806822abb072bbc4bbab431d185252d54cc8a3a8",
+    "ETH_USDT": "baa3f90e27aed6f534a24a5103ae86857d3f4cb027349b130595071af32efc0a",
+    "SOL_USDT": "1cbeb1b82ff84757c1e6d3408e8e28c9d664bc13b8d401cc1b5d059dfa881703",
+    "BNB_USDT": "d62ee80cac9577ac2b0b8b9b657a0d8f19b766f24869155a654534fc97fafec5",
+    "XRP_USDT": "be34acd556c52d631f8a58edeec08cd08218455ed805062f2b3939d2a1d610a7",
+    "AVAX_USDT": "4e89c3074c2e1c60a8fad7430fe5ad8f70a9ef8940145bccf89ffbd461572261",
+    "LINK_USDT": "6f5c0d317e0768381cf1336120d84243cb689594231017344d6a8f81dfbcbe5a",
+    "DOGE_USDT": "a7e08426d59d704f88aa3a3c461d7dc6147b723e8b58ef8ca5460cddcbde268a",
+    "ADA_USDT": "f1e925f89ff231b7464921cfbeb2f2709d265faa4e0cb335add2158d90b59284",
+    "LTC_USDT": "6cbf5644d093a1f325bdbb1b58bbc92a2139467be8be43ce23db1b0fc7496cc1",
+    "AAVE_USDT": "0860e8ec86602299eaa13a2094e7df2fb8ef6c82ae37f48bed9e32d0145af628",
+    "SUI_USDT": "16f6f979d441cef4e01653a5917da2a22cd124e18845718ce15c1315deca09c9"
   },
-  "dataset_sha256": "5f9922cf39df7455d907122effe354d0c46eb6e4b469c78410e5847460a7b3f2"
+  "dataset_sha256": "957e801e7b6827d1e1691d17fefdd17e1df2c77cafb149719e5e3f4f53b64565"
 }

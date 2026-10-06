@@ -1,15 +1,15 @@
-x<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Astel Research - TradingAgents Dashboard</title>
+    <title>Astel Research — Quantitative Workstation</title>
 
     <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Chart.js CDN (for small dashboard charts) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Chart.js CDN (for small dashboard charts) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Font Awesome CDN -->
     <link
@@ -21,426 +21,425 @@ x<!doctype html>
     />
 
     <style>
+      :root {
+        --bg-app: #090c10;
+        --bg-surface: #0d1117;
+        --bg-surface-elevated: #161b22;
+        --bg-surface-hover: #1f242c;
+        --border-subtle: #21262d;
+        --border-strong: #30363d;
+        --text-primary: #f0f6fc;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+      }
+
+      body {
+        background-color: var(--bg-app);
+        color: var(--text-primary);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      .font-mono-num {
+        font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
       @keyframes qtFlashGreen {
-        0% {
-          background-color: rgba(16, 185, 129, 0.22);
-        }
-        100% {
-          background-color: rgba(16, 185, 129, 0);
-        }
+        0% { background-color: rgba(16, 185, 129, 0.22); }
+        100% { background-color: transparent; }
       }
 
       @keyframes qtFlashRed {
-        0% {
-          background-color: rgba(244, 63, 94, 0.20);
-        }
-        100% {
-          background-color: rgba(244, 63, 94, 0);
-        }
+        0% { background-color: rgba(239, 68, 68, 0.20); }
+        100% { background-color: transparent; }
       }
 
-      .qt-flash-green {
-        animation: qtFlashGreen 650ms ease-out 1;
-        border-radius: 0.375rem;
-      }
+      .qt-flash-green { animation: qtFlashGreen 650ms ease-out 1; border-radius: 0.25rem; }
+      .qt-flash-red { animation: qtFlashRed 650ms ease-out 1; border-radius: 0.25rem; }
 
-      .qt-flash-red {
-        animation: qtFlashRed 650ms ease-out 1;
-        border-radius: 0.375rem;
-      }
+      /* Custom Workstation Scrollbar */
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: #090c10; }
+      ::-webkit-scrollbar-thumb { background: #21262d; border-radius: 2px; }
+      ::-webkit-scrollbar-thumb:hover { background: #30363d; }
     </style>
   </head>
 
-  <body class="bg-slate-950 text-slate-100">
-  <div class="w-full max-w-[108rem] mx-auto p-6 space-y-6">
-      <header class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">
-            <i class="fa-solid fa-chart-line mr-2 text-emerald-400"></i>
-            Astel Research - TradingAgents Monitor
-          </h1>
-          <p class="text-sm text-slate-400">Auto-refresh every 10 seconds (read-only).</p>
+  <body class="bg-[#090C10] text-[#F0F6FC] antialiased min-h-screen text-xs">
+    <!-- Workstation Container -->
+    <div class="w-full max-w-[124rem] mx-auto p-3 space-y-3">
+      
+      <!-- Top Terminal Header Bar (36px height) -->
+      <header class="flex items-center justify-between bg-[#0D1117] border border-[#21262D] rounded px-3 py-2 text-xs">
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 font-semibold tracking-wider text-[#F0F6FC] uppercase">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>ASTEL</span>
+            <span class="text-[#484F58]">|</span>
+            <span class="text-[#8B949E] font-normal text-[11px]">QUANTITATIVE RESEARCH WORKSTATION</span>
+          </div>
+          <span class="text-[#30363D]">/</span>
+          <a href="/agent" class="text-[#06B6D4] hover:text-cyan-300 font-mono text-[11px] flex items-center gap-1.5 transition-colors">
+            <i class="fa-solid fa-brain text-xs"></i>
+            <span>AI AGENT CONSOLE &rarr;</span>
+          </a>
         </div>
-        <div id="status" class="text-sm text-slate-400">Loading…</div>
+
+        <div class="flex items-center gap-4 text-[#8B949E] font-mono text-[11px]">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[#484F58]">EXCHANGE:</span>
+            <span class="text-emerald-400 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-server text-[10px]"></i> GATE.IO (FUTURES)
+            </span>
+          </div>
+          <span class="text-[#21262D]">|</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[#484F58]">AUTO-REFRESH:</span>
+            <span class="text-slate-300">10S</span>
+          </div>
+          <span class="text-[#21262D]">|</span>
+          <div id="status" class="text-emerald-400 font-mono">LIVE</div>
+        </div>
       </header>
 
-  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-wallet mr-2 text-sky-400"></i>
-            Account Summary
-          </h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-slate-400">Equity (USDT)</div>
-              <div id="equity" class="text-xl font-mono">—</div>
-              <div id="equity_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
-              <div id="equity_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Peak Equity (USDT)</div>
-              <div id="peak_equity" class="text-xl font-mono">—</div>
-              <div id="peak_equity_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
-              <div id="peak_equity_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
-            </div>
-            <div class="col-span-2">
-              <p id="starting_capital" class="text-xs text-slate-400 font-mono mt-1 hidden">—</p>
-              <p class="text-xs text-slate-500 font-mono mt-1">Exchange Connected: Gate</p>
+      <!-- Primary Telemetry Strip (5 Metric Columns) -->
+      <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
+        <!-- Equity Card -->
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-[#8B949E] text-[10px] uppercase font-mono tracking-wider">
+            <span>TOTAL EQUITY</span>
+            <i class="fa-solid fa-wallet text-sky-400/80"></i>
+          </div>
+          <div class="mt-1.5">
+            <div id="equity" class="text-lg font-bold font-mono-num text-[#F0F6FC] tracking-tight">—</div>
+          </div>
+        </div>
+
+        <!-- Peak Equity Card -->
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-[#8B949E] text-[10px] uppercase font-mono tracking-wider">
+            <span>PEAK EQUITY</span>
+            <i class="fa-solid fa-chart-line text-emerald-400/80"></i>
+          </div>
+          <div class="mt-1.5">
+            <div id="peak_equity" class="text-lg font-bold font-mono-num text-[#F0F6FC] tracking-tight">—</div>
+          </div>
+          <p id="starting_capital" class="text-[10px] text-[#484F58] font-mono mt-1 hidden">—</p>
+        </div>
+
+        <!-- Unrealized PnL Card -->
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-[#8B949E] text-[10px] uppercase font-mono tracking-wider">
+            <span>UNREALIZED P&L</span>
+            <i class="fa-solid fa-chart-area text-cyan-400/80"></i>
+          </div>
+          <div class="mt-1.5">
+            <div id="unreal_pnl" class="text-lg font-bold font-mono-num tracking-tight">—</div>
+            <div class="mt-1 text-[10px] font-mono-num text-[#8B949E]">
+              <span class="text-[#484F58]">POS: <span id="unreal_pos_count" class="text-slate-300 font-bold">—</span></span>
             </div>
           </div>
         </div>
 
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">
-              <i class="fa-solid fa-chart-simple mr-2 text-emerald-400"></i>
-              QT PERFORMANCE METRICS
-            </h2>
-            <div id="dex_status" class="text-xs font-semibold px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        <!-- Risk Metrics & Exposure -->
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-[#8B949E] text-[10px] uppercase font-mono tracking-wider">
+            <span>RISK & EXPOSURE</span>
+            <i class="fa-solid fa-shield-halved text-amber-400/80"></i>
+          </div>
+          <div class="mt-1.5 grid grid-cols-2 gap-2">
+            <div>
+              <div class="text-[10px] text-[#484F58]">DRAWDOWN</div>
+              <div id="drawdown" class="text-base font-bold font-mono-num text-amber-400">—</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-[#484F58]">EXPOSURE</div>
+              <div id="exposure" class="text-base font-bold font-mono-num text-slate-200">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QT Execution Status -->
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-[#8B949E] text-[10px] uppercase font-mono tracking-wider">
+            <span>QUANT ENGINE</span>
+            <span id="dex_status" class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               RUNNING
+            </span>
+          </div>
+          <div class="mt-1.5 grid grid-cols-2 gap-2">
+            <div>
+              <div class="text-[10px] text-[#484F58]">NET P&L</div>
+              <div id="dex_total_net_pnl" class="text-base font-bold font-mono-num">—</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-[#484F58]">WIN RATE</div>
+              <div id="dex_avg_win_rate" class="text-base font-bold font-mono-num text-emerald-400">—</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Workstation Grid: Positions & Charts -->
+      <section class="grid grid-cols-1 xl:grid-cols-12 gap-3">
+        
+        <!-- Positions Matrix (8 Columns) -->
+        <div class="xl:col-span-8 bg-[#0D1117] border border-[#21262D] rounded p-3 space-y-2.5">
+          <div class="flex items-center justify-between pb-2 border-b border-[#21262D]">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-bolt text-cyan-400"></i>
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-[#F0F6FC]">
+                Live Futures Positions Matrix
+              </h2>
+              <span class="text-[10px] font-mono text-[#8B949E]" id="cur_pos_count">—</span>
+            </div>
+
+            <!-- Compact Filter Controls -->
+            <div class="flex items-center gap-2">
+              <input id="cur_pos_filter_contract" type="text" placeholder="Filter Pair..." class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 w-28 focus:outline-none focus:border-[#58A6FF]" oninput="applyCurPosFilters()" />
+              <select id="cur_pos_filter_side" class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-[#58A6FF]" onchange="applyCurPosFilters()">
+                <option value="">All Sides</option>
+                <option value="BUY">BUY / LONG</option>
+                <option value="SELL">SELL / SHORT</option>
+              </select>
+              <select id="cur_pos_filter_mode" class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-[#58A6FF]" onchange="applyCurPosFilters()">
+                <option value="">All Modes</option>
+                <option value="TESTNET">TESTNET</option>
+                <option value="LIVE">LIVE</option>
+              </select>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-4">
-              <div class="text-xs text-slate-400">TOTAL NET PNL</div>
-              <div class="text-xs text-slate-500">ALL TIME</div>
-              <div id="dex_total_net_pnl" class="text-lg font-mono mt-2">—</div>
-            </div>
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-4">
-              <div class="text-xs text-slate-400">AVG. WIN RATE</div>
-              <div class="text-xs text-slate-500">ALL TIME</div>
-              <div id="dex_avg_win_rate" class="text-lg font-mono mt-2">—</div>
-            </div>
+          <!-- Table Container -->
+          <div class="overflow-x-auto min-h-[180px]">
+            <table class="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr class="text-[#8B949E] border-b border-[#21262D] uppercase font-mono text-[10px]">
+                  <th class="py-1.5 px-2 font-medium">Time</th>
+                  <th class="py-1.5 px-2 font-medium">Contract</th>
+                  <th class="py-1.5 px-2 font-medium">Side</th>
+                  <th class="py-1.5 px-2 font-medium text-right">Size (USDT)</th>
+                  <th class="py-1.5 px-2 font-medium text-right">Entry</th>
+                  <th class="py-1.5 px-2 font-medium text-right">Mark Price</th>
+                  <th class="py-1.5 px-2 font-medium text-right">Unrealized PnL</th>
+                  <th class="py-1.5 px-2 font-medium text-right">SL</th>
+                  <th class="py-1.5 px-2 font-medium text-right">TP</th>
+                  <th class="py-1.5 px-2 font-medium">Order ID</th>
+                  <th class="py-1.5 px-2 font-medium">Status</th>
+                  <th class="py-1.5 px-2 font-medium text-right">Mode</th>
+                </tr>
+              </thead>
+              <tbody id="cur_pos_tbody" class="font-mono-num divide-y divide-[#21262D]/40 text-[#F0F6FC]"></tbody>
+            </table>
           </div>
 
-          <div class="grid grid-cols-2 md:grid-cols-2 gap-3 mt-4 text-sm">
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
-              <div class="text-xs text-slate-400">TOTAL WIN</div>
-              <div id="dex_total_win" class="text-base font-mono mt-1">—</div>
+          <!-- Pagination Bar -->
+          <div class="flex items-center justify-between pt-2 border-t border-[#21262D] text-[11px] text-[#8B949E]">
+            <div class="flex items-center gap-2">
+              <span>Rows per page:</span>
+              <select id="cur_pos_page_size" class="bg-[#161B22] border border-[#21262D] rounded px-1.5 py-0.5 text-[11px] text-slate-200" onchange="updateCurPosPageSize()">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+              </select>
+              <span id="cur_pos_showing" class="text-[10px] text-[#484F58] ml-2">—</span>
             </div>
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
-              <div class="text-xs text-slate-400">TOTAL LOSS</div>
-              <div id="dex_total_loss" class="text-base font-mono mt-1">—</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 text-sm">
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
-              <div class="text-xs text-slate-400">Avg. TOTAL PNL</div>
-              <div id="dex_avg_total_pnl" class="text-base font-mono mt-1">—</div>
-            </div>
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
-              <div class="text-xs text-slate-400">Avg. WIN RATE</div>
-              <div id="dex_avg_win_rate_2" class="text-base font-mono mt-1">—</div>
-            </div>
-            <div class="rounded-lg bg-slate-950/40 border border-slate-800 p-3">
-              <div class="text-xs text-slate-400">Avg. APY</div>
-              <div id="dex_avg_apy" class="text-base font-mono mt-1">—</div>
+            <div class="flex items-center gap-2">
+              <button id="cur_pos_prev" class="px-2.5 py-0.5 rounded bg-[#161B22] border border-[#21262D] text-slate-300 hover:bg-[#1F242C] disabled:opacity-30 disabled:cursor-not-allowed" onclick="changeCurPosPage(-1)">&larr; Prev</button>
+              <span id="cur_pos_page_info" class="text-[10px] text-[#8B949E] px-1">Page 1</span>
+              <button id="cur_pos_next" class="px-2.5 py-0.5 rounded bg-[#161B22] border border-[#21262D] text-slate-300 hover:bg-[#1F242C] disabled:opacity-30 disabled:cursor-not-allowed" onclick="changeCurPosPage(1)">Next &rarr;</button>
             </div>
           </div>
         </div>
 
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-chart-area mr-2 text-cyan-400"></i>
-            Unrealized PnL
-          </h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-slate-400">PnL (USDT)</div>
-              <div id="unreal_pnl" class="text-xl font-mono">—</div>
-              <div id="unreal_pnl_idr" class="text-xs text-slate-500 font-mono mt-1">—</div>
-              <div id="unreal_pnl_idr_words" class="text-xs text-slate-600 font-sans mt-1">—</div>
+        <!-- Performance & Analytics Panel (4 Columns) -->
+        <div class="xl:col-span-4 space-y-3">
+          <!-- Stats Summary Box -->
+          <div class="bg-[#0D1117] border border-[#21262D] rounded p-3 space-y-2.5">
+            <div class="flex items-center justify-between pb-2 border-b border-[#21262D]">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-amber-400"></i>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-[#F0F6FC]">Historical Closed Trades</h2>
+              </div>
             </div>
-            <div>
-              <div class="text-xs text-slate-400">Open positions</div>
-              <div id="unreal_pos_count" class="text-xl font-mono">—</div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-[#161B22] border border-[#21262D] rounded p-2">
+                <div class="text-[10px] text-[#8B949E]">WIN RATE</div>
+                <div id="winrate" class="text-base font-bold font-mono-num text-emerald-400 mt-0.5">—</div>
+              </div>
+              <div class="bg-[#161B22] border border-[#21262D] rounded p-2">
+                <div class="text-[10px] text-[#8B949E]">CLOSED TRADES</div>
+                <div id="closed_trades" class="text-base font-bold font-mono-num text-slate-200 mt-0.5">—</div>
+              </div>
+              <div class="bg-[#161B22] border border-[#21262D] rounded p-2">
+                <div class="text-[10px] text-[#8B949E]">TOTAL REALIZED P&L</div>
+                <div id="total_pnl" class="text-sm font-bold font-mono-num mt-0.5">—</div>
+              </div>
+              <div class="bg-[#161B22] border border-[#21262D] rounded p-2">
+                <div class="text-[10px] text-[#8B949E]">AVG TRADE P&L</div>
+                <div id="avg_pnl" class="text-sm font-bold font-mono-num mt-0.5">—</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+              <div class="flex justify-between items-center text-[#8B949E]">
+                <span>TOTAL WINS:</span>
+                <span id="dex_total_win" class="font-mono-num text-emerald-400 font-semibold">—</span>
+              </div>
+              <div class="flex justify-between items-center text-[#8B949E]">
+                <span>TOTAL LOSSES:</span>
+                <span id="dex_total_loss" class="font-mono-num text-rose-400 font-semibold">—</span>
+              </div>
+              <div class="col-span-2 flex justify-between items-center text-[#8B949E] pt-1 border-t border-[#21262D]">
+                <span>AVG TOTAL P&L:</span>
+                <span id="dex_avg_total_pnl" class="font-mono-num text-slate-200">—</span>
+              </div>
             </div>
           </div>
-          <div class="text-xs text-slate-500 mt-2">Sum of exchange <span class="font-mono">unrealised_pnl</span> across open positions.</div>
-        </div>
 
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-percent mr-2 text-emerald-400"></i>
-            Average Win Rate (All-Time)
+          <!-- ML Model Config Card -->
+          <div class="bg-[#0D1117] border border-[#21262D] rounded p-3 space-y-2">
+            <div class="flex items-center justify-between pb-1.5 border-b border-[#21262D]">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-brain text-fuchsia-400"></i>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-[#F0F6FC]">ML Model Telemetry</h2>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div>
+                <span class="text-[#484F58] block text-[10px]">MODEL TYPE</span>
+                <span id="ml_model" class="text-slate-200 font-semibold">—</span>
+              </div>
+              <div>
+                <span class="text-[#484F58] block text-[10px]">TIMEFRAME</span>
+                <span id="ml_timeframe" class="text-slate-200 font-semibold">—</span>
+              </div>
+              <div>
+                <span class="text-[#484F58] block text-[10px]">MIN TRAIN ROWS</span>
+                <span id="ml_min_rows" class="text-slate-200">—</span>
+              </div>
+              <div>
+                <span class="text-[#484F58] block text-[10px]">DATA SOURCE</span>
+                <span id="ml_data_source" class="text-slate-200">—</span>
+              </div>
+            </div>
+            <div class="pt-1">
+              <span class="text-[#484F58] block text-[10px] uppercase font-mono mb-1">LightGBM Parameters</span>
+              <pre id="ml_params" class="text-[10px] font-mono bg-[#161B22] border border-[#21262D] rounded p-2 overflow-x-auto text-slate-300 max-h-24">—</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Charts Section (3 Columns) -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-3">
+          <h2 class="text-xs font-semibold text-[#8B949E] uppercase font-mono mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-percent text-emerald-400"></i> All-Time Win Rate Distribution
           </h2>
-          <div class="h-40">
+          <div class="h-36">
             <canvas id="chart_alltime_winrate"></canvas>
           </div>
-          <div class="text-xs text-slate-500 mt-2">Computed from <span class="font-mono">trade_closures</span> (all rows).</div>
         </div>
 
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-coins mr-2 text-amber-400"></i>
-            Net PnL (Monthly)
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-3">
+          <h2 class="text-xs font-semibold text-[#8B949E] uppercase font-mono mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-coins text-amber-400"></i> Monthly Net P&L Breakdown
           </h2>
-          <div class="h-40">
+          <div class="h-36">
             <canvas id="chart_monthly_netpnl"></canvas>
           </div>
-          <div class="text-xs text-slate-500 mt-2">Net PnL per month from <span class="font-mono">trade_closures.pnl</span>.</div>
         </div>
 
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-scale-balanced mr-2 text-fuchsia-400"></i>
-            Win/Loss Ratio (Monthly)
+        <div class="bg-[#0D1117] border border-[#21262D] rounded p-3">
+          <h2 class="text-xs font-semibold text-[#8B949E] uppercase font-mono mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-scale-balanced text-fuchsia-400"></i> Monthly Win / Loss Count
           </h2>
-          <div class="h-40">
+          <div class="h-36">
             <canvas id="chart_monthly_wl"></canvas>
           </div>
-          <div class="text-xs text-slate-500 mt-2">Monthly wins vs losses counts.</div>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-trophy mr-2 text-emerald-400"></i>
-            Closed Trades Stats
-          </h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-slate-400">Win rate</div>
-              <div id="winrate" class="text-xl font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Closed trades</div>
-              <div id="closed_trades" class="text-xl font-mono">—</div>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <div class="text-xs text-slate-400">Total PnL</div>
-              <div id="total_pnl" class="text-lg font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Avg PnL</div>
-              <div id="avg_pnl" class="text-lg font-mono">—</div>
-            </div>
-          </div>
-          <!-- <div class="text-xs text-slate-500 mt-2">Computed from SQLite table <span class="font-mono">trade_closures</span> (last 500).</div> -->
-        </div>
-
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-brain mr-2 text-fuchsia-400"></i>
-            Machine Learning Config
-          </h2>
-          <div class="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <div class="text-xs text-slate-400">Model</div>
-              <div id="ml_model" class="font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Min train rows</div>
-              <div id="ml_min_rows" class="font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Timeframe</div>
-              <div id="ml_timeframe" class="font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Data source</div>
-              <div id="ml_data_source" class="font-mono">—</div>
-            </div>
-          </div>
-          <div class="mt-4">
-            <div class="text-xs text-slate-400 mb-1">LightGBM params</div>
-            <pre id="ml_params" class="text-xs bg-slate-950/40 border border-slate-800 rounded-lg p-3 overflow-x-auto text-slate-200">—</pre>
-          </div>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-          <h2 class="text-lg font-semibold mb-4">
-            <i class="fa-solid fa-shield-halved mr-2 text-amber-400"></i>
-            Risk Metrics
-          </h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <div class="text-xs text-slate-400">Drawdown</div>
-              <div id="drawdown" class="text-xl font-mono">—</div>
-            </div>
-            <div>
-              <div class="text-xs text-slate-400">Total Exposure</div>
-              <div id="exposure" class="text-xl font-mono">—</div>
-            </div>
-          </div>
         </div>
       </section>
 
-      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold">
-            <i class="fa-solid fa-layer-group mr-2 text-fuchsia-400"></i>
-            Open Positions
-          </h2>
-          <div class="text-xs text-slate-400" id="positions_count">—</div>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="text-slate-300">
-              <tr class="border-b border-slate-800">
-                <th class="text-left py-2 pr-4">PAIR</th>
-                <th class="text-left py-2 px-4">POSITION</th>
-                <th class="text-right py-2 px-4">LEV</th>
-                <th class="text-right py-2 px-4">ENTRY PRICE</th>
-                <th class="text-right py-2 px-4">MARK PRICE</th>
-                <th class="text-right py-2 px-4">TAKE PROFIT</th>
-                <th class="text-right py-2 px-4">STOP LOSS</th>
-                <th class="text-right py-2 px-4">ENTRY PRICE</th>
-                <th class="text-right py-2 px-4">EXIT PRICE</th>
-                <th class="text-right py-2 px-4">PROFIT</th>
-                <th class="text-left py-2 pl-4">STATE</th>
-              </tr>
-            </thead>
-            <tbody id="positions_tbody" class="font-mono text-slate-100"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-        <h2 class="text-lg font-semibold mb-4">
-          <i class="fa-solid fa-calendar-week mr-2 text-emerald-400"></i>
-          Weekly Performance
+      <!-- Weekly Performance Section -->
+      <section class="bg-[#0D1117] border border-[#21262D] rounded p-3 space-y-2">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-[#F0F6FC] flex items-center gap-2">
+          <i class="fa-solid fa-calendar-week text-emerald-400"></i> Weekly Performance Telemetry
         </h2>
-        <div id="weekly" class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm"></div>
+        <div id="weekly" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 text-xs"></div>
       </section>
 
-      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold">
-            <i class="fa-solid fa-bolt mr-2 text-cyan-400"></i>
-            Current Positions
-          </h2>
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400" id="cur_pos_count">—</span>
+      <!-- Trade Closure Audit Log (Full Width) -->
+      <section class="bg-[#0D1117] border border-[#21262D] rounded p-3 space-y-2.5">
+        <div class="flex items-center justify-between pb-2 border-b border-[#21262D]">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-flag-checkered text-emerald-400"></i>
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-[#F0F6FC]">
+              Historical Trade Closures & Replay Audit Log
+            </h2>
+            <span class="text-[10px] font-mono text-[#8B949E]" id="closures_count">—</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input id="closures_filter_contract" type="text" placeholder="Filter Pair..." class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 w-28 focus:outline-none focus:border-[#58A6FF]" oninput="applyClosuresFilters()" />
+            <select id="closures_filter_side" class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-[#58A6FF]" onchange="applyClosuresFilters()">
+              <option value="">All Sides</option>
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+              <option value="LONG">LONG</option>
+              <option value="SHORT">SHORT</option>
+            </select>
+            <select id="closures_filter_pnl" class="bg-[#161B22] border border-[#21262D] rounded px-2 py-0.5 text-[11px] text-slate-200 focus:outline-none focus:border-[#58A6FF]" onchange="applyClosuresFilters()">
+              <option value="">All P&L Outcome</option>
+              <option value="win">PROFIT ONLY</option>
+              <option value="loss">LOSS ONLY</option>
+            </select>
           </div>
         </div>
-        <!-- Filters -->
-        <div class="flex flex-wrap items-center gap-3 mb-3">
-          <input id="cur_pos_filter_contract" type="text" placeholder="Filter contract..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32" oninput="applyCurPosFilters()" />
-          <select id="cur_pos_filter_side" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyCurPosFilters()">
-            <option value="">All sides</option>
-            <option value="BUY">BUY</option>
-            <option value="SELL">SELL</option>
-          </select>
-          <select id="cur_pos_filter_mode" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyCurPosFilters()">
-            <option value="">All modes</option>
-            <option value="TESTNET">TESTNET</option>
-            <option value="LIVE">LIVE</option>
-          </select>
-          <span class="text-xs text-slate-500" id="cur_pos_showing">—</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="text-slate-300">
-              <tr class="border-b border-slate-800">
-                <th class="text-left py-2 pr-4">Time</th>
-                <th class="text-left py-2 px-4">Contract</th>
-                <th class="text-left py-2 px-4">Side</th>
-                <th class="text-right py-2 px-4">Size</th>
-                <th class="text-right py-2 px-4">Avg Fill</th>
-                <th class="text-right py-2 px-4">Current Price</th>
-                <th class="text-right py-2 px-4">Unrealized PnL</th>
-                <th class="text-right py-2 px-4">Stop Loss</th>
-                <th class="text-right py-2 px-4">Take Profit</th>
-                <th class="text-left py-2 px-4">Exchange Order ID</th>
-                <th class="text-left py-2 px-4">Status</th>
-                <th class="text-left py-2 pl-4">Mode</th>
+
+        <div class="overflow-x-auto min-h-[160px]">
+          <table class="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr class="text-[#8B949E] border-b border-[#21262D] uppercase font-mono text-[10px]">
+                <th class="py-1.5 px-2 font-medium">Closure Time</th>
+                <th class="py-1.5 px-2 font-medium">Contract</th>
+                <th class="py-1.5 px-2 font-medium">Side</th>
+                <th class="py-1.5 px-2 font-medium">Exit Reason</th>
+                <th class="py-1.5 px-2 font-medium text-right">Size</th>
+                <th class="py-1.5 px-2 font-medium text-right">Entry Price</th>
+                <th class="py-1.5 px-2 font-medium text-right">Exit Price</th>
+                <th class="py-1.5 px-2 font-medium text-right">Fees</th>
+                <th class="py-1.5 px-2 font-medium text-right">Realized PnL</th>
+                <th class="py-1.5 px-2 font-medium text-right">Order ID</th>
               </tr>
             </thead>
-            <tbody id="cur_pos_tbody" class="font-mono text-slate-100"></tbody>
+            <tbody id="closures_tbody" class="font-mono-num divide-y divide-[#21262D]/40 text-[#F0F6FC]"></tbody>
           </table>
         </div>
-        <!-- Pagination -->
-        <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
+
+        <div class="flex items-center justify-between pt-2 border-t border-[#21262D] text-[11px] text-[#8B949E]">
           <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500">Rows:</span>
-            <select id="cur_pos_page_size" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="updateCurPosPageSize()">
+            <span>Rows per page:</span>
+            <select id="closures_page_size" class="bg-[#161B22] border border-[#21262D] rounded px-1.5 py-0.5 text-[11px] text-slate-200" onchange="updateClosuresPageSize()">
               <option value="5">5</option>
               <option value="10">10</option>
               <option value="25">25</option>
-              <option value="50">50</option>
             </select>
+            <span id="closures_showing" class="text-[10px] text-[#484F58] ml-2">—</span>
           </div>
-          <div class="flex items-center gap-1">
-            <button id="cur_pos_prev" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeCurPosPage(-1)">← Prev</button>
-            <span id="cur_pos_page_info" class="text-xs text-slate-400 px-2">Page 1</span>
-            <button id="cur_pos_next" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeCurPosPage(1)">Next →</button>
-          </div>
-        </div>
-        <div class="text-xs text-slate-500 mt-2">Source: <span class="font-mono">agent_trade_replay_events</span> (ExecutionEngine) + Gate.io live mark price.</div>
-      </section>
-
-      <section class="rounded-xl bg-slate-900/60 border border-slate-800 p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold">
-            <i class="fa-solid fa-flag-checkered mr-2 text-emerald-400"></i>
-            Recent Closures (Realized)
-          </h2>
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400" id="closures_count">—</span>
-          </div>
-        </div>
-        <!-- Filters -->
-        <div class="flex flex-wrap items-center gap-3 mb-3">
-          <input id="closures_filter_contract" type="text" placeholder="Filter contract..." class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32" oninput="applyClosuresFilters()" />
-          <select id="closures_filter_side" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyClosuresFilters()">
-            <option value="">All sides</option>
-            <option value="BUY">BUY</option>
-            <option value="SELL">SELL</option>
-            <option value="LONG">LONG</option>
-            <option value="SHORT">SHORT</option>
-          </select>
-          <select id="closures_filter_pnl" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="applyClosuresFilters()">
-            <option value="">All PnL</option>
-            <option value="win">WIN</option>
-            <option value="loss">LOSS</option>
-          </select>
-          <span class="text-xs text-slate-500" id="closures_showing">—</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="text-slate-300">
-              <tr class="border-b border-slate-800">
-                <th class="text-left py-2 pr-4">Time</th>
-                <th class="text-left py-2 px-4">Contract</th>
-                <th class="text-left py-2 px-4">Side</th>
-                <th class="text-left py-2 px-4">Reason</th>
-                <th class="text-right py-2 px-4">Qty</th>
-                <th class="text-right py-2 px-4">Entry</th>
-                <th class="text-right py-2 px-4">Exit</th>
-                <th class="text-right py-2 px-4">Fees</th>
-                <th class="text-right py-2 px-4">PnL</th>
-                <th class="text-left py-2 pl-4">Exchange Order ID</th>
-              </tr>
-            </thead>
-            <tbody id="closures_tbody" class="font-mono text-slate-100"></tbody>
-          </table>
-        </div>
-        <!-- Pagination -->
-        <div class="flex items-center justify-between mt-3 flex-wrap gap-2">
           <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500">Rows:</span>
-            <select id="closures_page_size" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200" onchange="updateClosuresPageSize()">
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-          <div class="flex items-center gap-1">
-            <button id="closures_prev" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeClosuresPage(-1)">← Prev</button>
-            <span id="closures_page_info" class="text-xs text-slate-400 px-2">Page 1</span>
-            <button id="closures_next" class="px-3 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed" onclick="changeClosuresPage(1)">Next →</button>
+            <button id="closures_prev" class="px-2.5 py-0.5 rounded bg-[#161B22] border border-[#21262D] text-slate-300 hover:bg-[#1F242C] disabled:opacity-30 disabled:cursor-not-allowed" onclick="changeClosuresPage(-1)">&larr; Prev</button>
+            <span id="closures_page_info" class="text-[10px] text-[#8B949E] px-1">Page 1</span>
+            <button id="closures_next" class="px-2.5 py-0.5 rounded bg-[#161B22] border border-[#21262D] text-slate-300 hover:bg-[#1F242C] disabled:opacity-30 disabled:cursor-not-allowed" onclick="changeClosuresPage(1)">Next &rarr;</button>
           </div>
         </div>
-        <div class="text-xs text-slate-500 mt-2">Source: <span class="font-mono">agent_trade_replay_events</span> (real exchange data).</div>
       </section>
 
-      <footer class="text-xs text-slate-500 py-2">
-        Data sources: Gate.io futures (read-only) · agent_trade_replay_events (ExecutionEngine) · SQLite tables (equity_curve, weekly_performance).
+      <!-- Institutional Footer -->
+      <footer class="flex items-center justify-between text-[10px] text-[#484F58] font-mono py-1 border-t border-[#21262D]/50">
+        <div>DATA SOURCES: GATE.IO FUTURES (READ-ONLY REST/WS) &bull; AGENT_TRADE_REPLAY_EVENTS &bull; ASTEL QUANT ENGINE</div>
+        <div>STRICT AUDIT MODE ACTIVE &bull; CONFIDENTIAL</div>
       </footer>
     </div>
 
@@ -552,10 +551,12 @@ x<!doctype html>
         if (!r.ok) throw new Error("/api/account failed");
         const d = await r.json();
 
-        document.getElementById("equity").textContent = fmtUsd(d.equity);
-        document.getElementById("peak_equity").textContent = fmtUsd(d.peak_equity);
+        const eqEl = document.getElementById("equity");
+        if (eqEl) eqEl.textContent = fmtUsd(d.equity);
 
-        // Optional: show IDR conversion if rate is provided by backend.
+        const peakEl = document.getElementById("peak_equity");
+        if (peakEl) peakEl.textContent = fmtUsd(d.peak_equity);
+
         const rate = Number(d.usdt_to_idr);
         const hasRate = !Number.isNaN(rate) && rate > 0;
         const equityIdrEl = document.getElementById("equity_idr");
@@ -563,30 +564,30 @@ x<!doctype html>
         const equityWordsEl = document.getElementById("equity_idr_words");
         const peakWordsEl = document.getElementById("peak_equity_idr_words");
         if (hasRate) {
-          // Cache rate so WS-driven cards (unrealized) can update without refetching /api/account.
           window.__usdtToIdrRate = rate;
           const eqIdr = Math.round(Number(d.equity) * rate);
           const pkIdr = Math.round(Number(d.peak_equity) * rate);
 
-          equityIdrEl.textContent = "Rp " + fmtIdr(eqIdr);
-          peakIdrEl.textContent = "Rp " + fmtIdr(pkIdr);
+          if (equityIdrEl) equityIdrEl.textContent = "Rp " + fmtIdr(eqIdr);
+          if (peakIdrEl) peakIdrEl.textContent = "Rp " + fmtIdr(pkIdr);
 
-          const eqWords = terbilang(eqIdr);
-          const pkWords = terbilang(pkIdr);
           const eqWords2 = terbilangRupiahNoLast3(eqIdr);
           const pkWords2 = terbilangRupiahNoLast3(pkIdr);
-          equityWordsEl.textContent = eqWords2 || "—";
-          peakWordsEl.textContent = pkWords2 || "—";
+          if (equityWordsEl) equityWordsEl.textContent = eqWords2 || "—";
+          if (peakWordsEl) peakWordsEl.textContent = pkWords2 || "—";
         } else {
           window.__usdtToIdrRate = null;
-          equityIdrEl.textContent = "—";
-          peakIdrEl.textContent = "—";
-          equityWordsEl.textContent = "—";
-          peakWordsEl.textContent = "—";
+          if (equityIdrEl) equityIdrEl.textContent = "—";
+          if (peakIdrEl) peakIdrEl.textContent = "—";
+          if (equityWordsEl) equityWordsEl.textContent = "—";
+          if (peakWordsEl) peakWordsEl.textContent = "—";
         }
 
-        document.getElementById("drawdown").textContent = fmtPct(d.drawdown);
-        document.getElementById("exposure").textContent = fmtPct(d.total_exposure);
+        const ddEl = document.getElementById("drawdown");
+        if (ddEl) ddEl.textContent = fmtPct(d.drawdown);
+
+        const expEl = document.getElementById("exposure");
+        if (expEl) expEl.textContent = fmtPct(d.total_exposure);
 
         // Optional: starting capital (modal awal)
         const scEl = document.getElementById("starting_capital");
@@ -604,7 +605,6 @@ x<!doctype html>
       }
 
       async function loadUnrealizedPnL() {
-        // We reuse /api/account for the optional USDT->IDR rate.
         const [ra, rp] = await Promise.all([fetch("/api/account"), fetch("/api/positions")]);
         if (!ra.ok) throw new Error("/api/account failed");
         if (!rp.ok) throw new Error("/api/positions failed");
@@ -620,9 +620,12 @@ x<!doctype html>
         }
 
         const pnlEl = document.getElementById("unreal_pnl");
-        pnlEl.textContent = fmtUsd(sum);
-        pnlEl.className = "text-xl font-mono " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
-        document.getElementById("unreal_pos_count").textContent = String(positions.length);
+        if (pnlEl) {
+          pnlEl.textContent = fmtUsd(sum);
+          pnlEl.className = "text-lg font-bold font-mono-num tracking-tight " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
+        }
+        const countEl = document.getElementById("unreal_pos_count");
+        if (countEl) countEl.textContent = String(positions.length);
 
         const rate = Number(a.usdt_to_idr);
         const hasRate = !Number.isNaN(rate) && rate > 0;
@@ -631,14 +634,12 @@ x<!doctype html>
         if (hasRate) {
           const idr = Math.round(sum * rate);
           const absIdr = Math.abs(idr);
-          idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
-
-          const w = terbilang(absIdr);
+          if (idrEl) idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
           const w2 = terbilangRupiahNoLast3(absIdr);
-          wordsEl.textContent = w2 || "—";
+          if (wordsEl) wordsEl.textContent = w2 || "—";
         } else {
-          idrEl.textContent = "—";
-          wordsEl.textContent = "—";
+          if (idrEl) idrEl.textContent = "—";
+          if (wordsEl) wordsEl.textContent = "—";
         }
       }
 
@@ -649,12 +650,15 @@ x<!doctype html>
         if (Number.isNaN(sum)) return;
 
         const pnlEl = document.getElementById("unreal_pnl");
-        pnlEl.textContent = fmtUsd(sum);
-        pnlEl.className = "text-xl font-mono " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
+        if (pnlEl) {
+          pnlEl.textContent = fmtUsd(sum);
+          pnlEl.className = "text-lg font-bold font-mono-num tracking-tight " + (sum >= 0 ? "text-emerald-400" : "text-rose-400");
+        }
 
         const cnt = Number(msg.pos_count);
         if (!Number.isNaN(cnt)) {
-          document.getElementById("unreal_pos_count").textContent = String(cnt);
+          const countEl = document.getElementById("unreal_pos_count");
+          if (countEl) countEl.textContent = String(cnt);
         }
 
         const rate = Number(window.__usdtToIdrRate);
@@ -664,9 +668,9 @@ x<!doctype html>
         if (hasRate) {
           const idr = Math.round(sum * rate);
           const absIdr = Math.abs(idr);
-          idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
+          if (idrEl) idrEl.textContent = (idr < 0 ? "-" : "") + "Rp " + fmtIdr(absIdr);
           const w2 = terbilangRupiahNoLast3(absIdr);
-          wordsEl.textContent = w2 || "—";
+          if (wordsEl) wordsEl.textContent = w2 || "—";
         }
       }
 
@@ -686,7 +690,7 @@ x<!doctype html>
 
       function posCell(val, alignRight = true) {
         const td = document.createElement("td");
-        td.className = (alignRight ? "text-right" : "text-left") + " py-2 px-4 whitespace-nowrap";
+        td.className = (alignRight ? "text-right" : "text-left") + " py-1.5 px-2 whitespace-nowrap font-mono-num text-[11px]";
         td.textContent = val;
         return td;
       }
@@ -695,44 +699,30 @@ x<!doctype html>
         const r = await fetch("/api/positions");
         if (!r.ok) throw new Error("/api/positions failed");
         const d = await r.json();
-        const positions = d.positions || [];
-
-        renderPositions(positions);
+        renderPositions(d.positions || []);
       }
 
       function renderPositions(positions) {
         positions = positions || [];
-
-        document.getElementById("positions_count").textContent = positions.length + " open";
-
-        const tbody = document.getElementById("positions_tbody");
+        const tbody = document.getElementById("cur_pos_tbody") || document.getElementById("positions_tbody");
+        if (!tbody) return;
         tbody.innerHTML = "";
 
-  for (const p of positions) {
+        for (const p of positions) {
           const tr = document.createElement("tr");
           tr.className = "border-b border-slate-800/60";
 
           const pair = p.contract ?? "—";
-
-          // Gate USDT futures: size > 0 long, size < 0 short.
           const sizeNum = Number(p.size ?? 0);
           const positionSide = sizeNum > 0 ? "LONG" : sizeNum < 0 ? "SHORT" : "FLAT";
-
           const lev = p.lever ?? p.leverage ?? null;
-
           const mark = p.mark_price ?? p.mark ?? null;
           const entry = p.entry_price ?? p.entry ?? null;
-
-          // TP/SL are derived from open trigger orders merged into /api/positions as:
-          // - p.tp_price (best-effort)
-          // - p.sl_price (best-effort)
-          // Some exchanges return multiple triggers; if that happens, backend will send candidates.
-          // Here we also try to classify with side if we have an array.
           let tp = p.take_profit ?? p.tp_price ?? null;
           let sl = p.stop_loss ?? p.sl_price ?? null;
-
-          // If backend ever sends a list of trigger prices, classify them.
-          const triggers = Array.isArray(p.trigger_prices) ? p.trigger_prices.map(Number).filter((x) => !Number.isNaN(x)) : null;
+          const triggers = Array.isArray(p.trigger_prices)
+            ? p.trigger_prices.map(Number).filter((x) => !Number.isNaN(x))
+            : null;
           if (triggers && triggers.length) {
             const ref = Number(entry ?? mark);
             if (!Number.isNaN(ref)) {
@@ -750,12 +740,7 @@ x<!doctype html>
             }
           }
 
-          // Exit price is only meaningful for closed trades; for open positions we show “—”.
-          const exitPrice = null;
-
           const profit = p.unrealised_pnl ?? p.unrealized_pnl ?? p.pnl ?? null;
-
-          // Detect profit delta for animation.
           const key = String(pair);
           const profitNumNow = Number(profit);
           const hadPrev = Object.prototype.hasOwnProperty.call(window.__lastProfitByPair, key);
@@ -769,59 +754,37 @@ x<!doctype html>
             window.__lastProfitByPair[key] = profitNumNow;
           }
 
-          // A lightweight “state” guess.
-          const state = sizeNum !== 0 ? "OPEN" : "—";
+          const tdPair = document.createElement("td");
+          const tdTime = document.createElement("td");
+          tdTime.className = "text-left py-1.5 px-2 whitespace-nowrap font-sans text-[11px]";
+          tdTime.textContent = "LIVE";
+          tr.appendChild(tdTime);
+          tdPair.className = "text-left py-1.5 px-2 whitespace-nowrap font-sans text-[11px]";
+          tdPair.textContent = pair;
+          tr.appendChild(tdPair);
 
-          const pairTd = document.createElement("td");
-          pairTd.className = "text-left py-2 pr-4 whitespace-nowrap font-sans";
-          pairTd.textContent = pair;
-          tr.appendChild(pairTd);
-
-          const posTd = document.createElement("td");
-          posTd.className = "text-left py-2 px-4 whitespace-nowrap font-sans";
-
-          const badge = document.createElement("span");
-          badge.className =
-            "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold mr-2 " +
-            (positionSide === "LONG"
-              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-              : positionSide === "SHORT"
-              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30"
-              : "bg-slate-700/30 text-slate-300 border border-slate-600/30");
-          badge.textContent = positionSide;
-          posTd.appendChild(badge);
-
-          const posText = document.createElement("span");
-          posText.textContent = Math.abs(sizeNum).toString();
-          posTd.appendChild(posText);
-          tr.appendChild(posTd);
-
+          const tdSide = document.createElement("td");
+          tdSide.className = "text-left py-1.5 px-2 whitespace-nowrap font-sans text-[11px]";
+          tdSide.textContent = positionSide;
+          tr.appendChild(tdSide);
+          tr.appendChild(posCell(sizeNum ? Math.abs(sizeNum).toString() : "—"));
           tr.appendChild(posCell(lev === null ? "—" : String(lev) + "x"));
-          // PRICE column: show ENTRY price (as requested)
           tr.appendChild(posCell(entry === null ? "—" : fmtPx(entry)));
-          // MARK PRICE column: live mark price from Gate position payload
           tr.appendChild(posCell(mark === null ? "—" : fmtPx(mark)));
-          tr.appendChild(posCell(tp === null ? "—" : fmtPx(tp)));
-          tr.appendChild(posCell(sl === null ? "—" : fmtPx(sl)));
-          tr.appendChild(posCell(entry === null ? "—" : fmtPx(entry)));
-          tr.appendChild(posCell(exitPrice === null ? "—" : fmtUsd(exitPrice)));
 
           const pnlTd = posCell(profit === null ? "—" : fmtUsd(profit));
-          const pnlNum = Number(profit);
-          if (!Number.isNaN(pnlNum)) {
-            pnlTd.className += pnlNum >= 0 ? " text-emerald-400" : " text-rose-400";
+          if (!Number.isNaN(profitNumNow)) {
+            pnlTd.className += profitNumNow >= 0 ? " text-emerald-400" : " text-rose-400";
           }
-          // Flash on change (only when we had a previous value).
           if (profitDeltaSign !== 0) {
             pnlTd.className += profitDeltaSign > 0 ? " qt-flash-green" : " qt-flash-red";
           }
           tr.appendChild(pnlTd);
-
-          const stateTd = document.createElement("td");
-          stateTd.className = "text-left py-2 pl-4 whitespace-nowrap font-sans text-slate-300";
-          stateTd.textContent = state;
-          tr.appendChild(stateTd);
-
+          tr.appendChild(posCell(sl === null ? "—" : fmtPx(sl)));
+          tr.appendChild(posCell(tp === null ? "—" : fmtPx(tp)));
+          tr.appendChild(posCell("—"));
+          tr.appendChild(posCell("OPEN", false));
+          tr.appendChild(posCell("—", false));
           tbody.appendChild(tr);
         }
       }
@@ -851,8 +814,6 @@ x<!doctype html>
           };
 
           ws.onclose = () => {
-            // Fallback: refresh positions via polling every 2s.
-            // (We keep the main refresh loop at 10s for other cards.)
             if (!window.__positionsPollingFallback) {
               window.__positionsPollingFallback = true;
               setInterval(() => {
@@ -861,7 +822,6 @@ x<!doctype html>
             }
           };
         } catch {
-          // If WS isn't supported, fallback to polling.
           if (!window.__positionsPollingFallback) {
             window.__positionsPollingFallback = true;
             setInterval(() => {
@@ -873,12 +833,12 @@ x<!doctype html>
 
       function weeklyCard(label, value) {
         const box = document.createElement("div");
-        box.className = "rounded-lg bg-slate-950/40 border border-slate-800 p-4";
+        box.className = "bg-[#161B22] border border-[#21262D] rounded p-2 text-xs";
         const l = document.createElement("div");
-        l.className = "text-xs text-slate-400";
+        l.className = "text-[10px] text-[#8B949E] uppercase font-mono";
         l.textContent = label;
         const v = document.createElement("div");
-        v.className = "text-lg font-mono mt-1";
+        v.className = "text-sm font-bold font-mono-num text-slate-200 mt-0.5";
         v.textContent = value;
         box.appendChild(l);
         box.appendChild(v);
@@ -945,9 +905,6 @@ x<!doctype html>
 
           document.getElementById("dex_avg_total_pnl").textContent = s.avg_pnl === null || s.avg_pnl === undefined ? "—" : fmtUsd(s.avg_pnl);
           document.getElementById("dex_avg_win_rate").textContent = wr === null ? "—" : fmtPct(wr);
-          document.getElementById("dex_avg_win_rate_2").textContent = wr === null ? "—" : fmtPct(wr);
-
-          document.getElementById("dex_avg_apy").textContent = "—";
         } catch (e) {
           // Don’t break stats rendering if card IDs are edited.
         }
@@ -1270,7 +1227,6 @@ x<!doctype html>
         if (!r.ok) throw new Error("/api/current-positions failed");
         const d = await r.json();
         _allCurPos = d.positions || [];
-        _curPosPage = 0;
         renderCurPosPage();
       }
 

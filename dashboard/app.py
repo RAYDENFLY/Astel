@@ -282,22 +282,15 @@ def api_qt_performance_metrics() -> Dict[str, Any]:
         This serves the "QT PERFORMANCE METRICS" card.
 
         Data source:
-            - SQLite `trade_closures` via `get_closed_trade_stats()`
-
-        Returns:
-            - total_net_pnl (all time)
-            - avg_win_rate (all time)
-            - total_win (count)
-            - total_loss (count)
-            - avg_total_pnl (avg pnl per non-push closure)
-            - avg_apy: currently null/placeholder
+            - AgentStorage agent_trade_replay_events via get_closed_trade_stats()
         """
         cfg = _load_config()
         db_path = _db_path(cfg)
-        s = get_closed_trade_stats(db_path, lookback=500)
+        storage = _get_agent_storage()
+        s = get_closed_trade_stats(db_path, storage=storage, lookback=500)
 
         # Prefer all-time winrate computation (wins/losses) for consistency with charts.
-        alltime_winrate = get_alltime_winrate(db_path)
+        alltime_winrate = get_alltime_winrate(db_path, storage=storage)
 
         return {
                 "total_net_pnl": s.get("total_pnl"),
@@ -306,7 +299,7 @@ def api_qt_performance_metrics() -> Dict[str, Any]:
                 "total_loss": s.get("losses"),
                 "avg_total_pnl": s.get("avg_pnl"),
                 "avg_apy": None,
-                "source": "sqlite.trade_closures",
+                "source": s.get("source", "agent_trade_replay_events"),
         }
 
 
@@ -546,13 +539,13 @@ def api_closures() -> Dict[str, Any]:
     """
     DEPRECATED — Use /api/replay/closures instead.
     
-    Returns legacy trade_closures data. Values may be estimates from
-    CSV close prices rather than real exchange fills.
+    Delegates to AgentStorage replay closures.
     """
     cfg = _load_config()
     db_path = _db_path(cfg)
-    rows = get_recent_closures(db_path, limit=50)
-    return {"closures": rows, "source": "legacy_trade_closures", "warning": "deprecated"}
+    storage = _get_agent_storage()
+    rows = get_recent_closures(db_path, storage=storage, limit=50)
+    return {"closures": rows, "source": "agent_trade_replay_events", "warning": "deprecated — use /api/replay/closures"}
 
 
 @app.get("/api/replay/closures")
@@ -584,10 +577,11 @@ def api_replay_closures(limit: int = 50) -> Dict[str, Any]:
 def api_stats() -> Dict[str, Any]:
     cfg = _load_config()
     db_path = _db_path(cfg)
-    stats = get_closed_trade_stats(db_path, lookback=500)
+    storage = _get_agent_storage()
+    stats = get_closed_trade_stats(db_path, storage=storage, lookback=500)
 
-    alltime_winrate = get_alltime_winrate(db_path)
-    monthly = get_monthly_pnl_and_wl(db_path, months=12)
+    alltime_winrate = get_alltime_winrate(db_path, storage=storage)
+    monthly = get_monthly_pnl_and_wl(db_path, storage=storage, months=12)
     return {
         "stats": stats,
         "alltime_winrate": alltime_winrate,

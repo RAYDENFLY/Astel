@@ -201,127 +201,275 @@ def get_recent_trades(db_path: str, *, limit: int = 50) -> List[Dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
-def get_closed_trade_stats(db_path: str, *, lookback: int = 200) -> Dict[str, Any]:
-    """Compute simple stats from most recent closed trades.
+def get_closed_trade_stats(
+    db_path: Optional[str] = None,
+    *,
+    storage: Optional[Any] = None,
+    lookback: int = 200,
+) -> Dict[str, Any]:
+    """Compute statistics from completed trades using AgentStorage trade replay events.
 
-    We use `trade_closures` because it has realized PnL.
-
-    Returns:
-      - closed_trades: number of closures considered
-      - wins: pnl > 0
-      - losses: pnl < 0
-      - winrate: wins / max(1, wins+losses) (pushes excluded)
-      - total_pnl: sum(pnl)
-      - avg_pnl: total_pnl / max(1, wins+losses)
+    Fallback: If AgentStorage is unavailable, attempts SQLite trade_closures.
     """
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT pnl
-            FROM trade_closures
-            ORDER BY closure_id DESC
-            LIMIT ?
-            """,
-            (int(lookback),),
-        ).fetchall()
+    if storage is None:
+        try:
+            from agent.storage import make_storage
+            storage = make_storage()
+        except Exception:
+            pass
 
-    pnls: List[float] = []
-    for r in rows:
-        v = _safe_float(r["pnl"])
-        if v is None:
-            continue
-        pnls.append(float(v))
+    if storage is not None:
+        try:
+            from agent.daily_report import get_closure_stats_from_replay
+            stats = get_closure_stats_from_replay(storage, lookback=lookback)
+            if stats:
+                return stats
+        except Exception:
+            pass
 
-    wins = sum(1 for p in pnls if p > 0)
-    losses = sum(1 for p in pnls if p < 0)
-    considered = wins + losses
-    winrate = (wins / considered) if considered > 0 else None
-    total_pnl = float(sum(pnls)) if pnls else 0.0
-    avg_pnl = (total_pnl / considered) if considered > 0 else None
+    # Fallback for SQLite trade_closures if db_path is provided
+    if db_path:
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT pnl
+                    FROM trade_closures
+                    ORDER BY closure_id DESC
+                    LIMIT ?
+                    """,
+                    (int(lookback),),
+                ).fetchall()
+
+            pnls: List[float] = []
+            for r in rows:
+                v = _safe_float(r["pnl"])
+                if v is None:
+                    continue
+                pnls.append(float(v))
+
+            wins = sum(1 for p in pnls if p > 0)
+            losses = sum(1 for p in pnls if p < 0)
+            considered = wins + losses
+            winrate = (wins / considered) if considered > 0 else None
+            total_pnl = float(sum(pnls)) if pnls else 0.0
+            avg_pnl = (total_pnl / considered) if considered > 0 else None
+
+            return {
+                "closed_trades": int(len(pnls)),
+                "wins": int(wins),
+                "losses": int(losses),
+                "winrate": float(winrate) if winrate is not None else None,
+                "total_pnl": float(total_pnl),
+                "avg_pnl": float(avg_pnl) if avg_pnl is not None else None,
+                "source": "sqlite.trade_closures",
+            }
+        except Exception:
+            pass
 
     return {
-        "closed_trades": int(len(pnls)),
-        "wins": int(wins),
-        "losses": int(losses),
-        "winrate": float(winrate) if winrate is not None else None,
-        "total_pnl": float(total_pnl),
-        "avg_pnl": float(avg_pnl) if avg_pnl is not None else None,
+        "closed_trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winrate": None,
+        "total_pnl": 0.0,
+        "avg_pnl": None,
+        "source": "agent_trade_replay_events",
     }
 
 
-def get_recent_closures(db_path: str, *, limit: int = 50) -> List[Dict[str, Any]]:
-    """Fetch recent trade closures (realized exits) from SQLite."""
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT closure_id, trade_id, timestamp, asset, side, qty,
-                   exit_order_id, exit_reason,
-                   entry_price, exit_price,
-                   gross_pnl, fees, pnl
-            FROM trade_closures
-            ORDER BY closure_id DESC
-            LIMIT ?
-            """,
-            (int(limit),),
-        ).fetchall()
-        return [dict(r) for r in rows]
+def get_recent_closures(
+    db_path: Optional[str] = None,
+    *,
+    storage: Optional[Any] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Fetch recent trade closures from AgentStorage trade replay events."""
+    if storage is None:
+        try:
+            from agent.storage import make_storage
+            storage = make_storage()
+        except Exception:
+            pass
+
+    if storage is not None:
+        try:
+            from agent.daily_report import get_closures_from_replay
+            rows = get_closures_from_replay(storage, limit=limit)
+            if rows is not None:
+                return rows
+        except Exception:
+            pass
+
+    # Fallback to SQLite trade_closures
+    if db_path:
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT closure_id, trade_id, timestamp, asset, side, qty,
+                           exit_order_id, exit_reason,
+                           entry_price, exit_price,
+                           gross_pnl, fees, pnl
+                    FROM trade_closures
+                    ORDER BY closure_id DESC
+                    LIMIT ?
+                    """,
+                    (int(limit),),
+                ).fetchall()
+                return [dict(r) for r in rows]
+        except Exception:
+            pass
+
+    return []
 
 
-def get_alltime_winrate(db_path: str) -> Optional[float]:
-    """All-time winrate computed from trade_closures (pnl > 0 vs pnl < 0).
+def get_alltime_winrate(
+    db_path: Optional[str] = None,
+    *,
+    storage: Optional[Any] = None,
+) -> Optional[float]:
+    """All-time winrate computed from AgentStorage trade replay events (pnl > 0 vs pnl < 0).
 
     Returns None if no wins/losses.
     """
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            """
-            SELECT
-              SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
-              SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) AS losses
-            FROM trade_closures
-            """
-        ).fetchone()
-        if not row:
-            return None
-        wins = int(row["wins"] or 0)
-        losses = int(row["losses"] or 0)
-        denom = wins + losses
-        if denom <= 0:
-            return None
-        return float(wins / denom)
+    if storage is None:
+        try:
+            from agent.storage import make_storage
+            storage = make_storage()
+        except Exception:
+            pass
+
+    if storage is not None:
+        try:
+            from agent.daily_report import get_closures_from_replay
+            closures = get_closures_from_replay(storage, limit=1000)
+            wins = 0
+            losses = 0
+            for c in closures:
+                pnl = c.get("realized_pnl")
+                if pnl is not None:
+                    try:
+                        v = float(pnl)
+                        if v > 0:
+                            wins += 1
+                        elif v < 0:
+                            losses += 1
+                    except Exception:
+                        pass
+            denom = wins + losses
+            if denom <= 0:
+                return None
+            return float(wins / denom)
+        except Exception:
+            pass
+
+    # Fallback to SQLite trade_closures
+    if db_path:
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    """
+                    SELECT
+                      SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
+                      SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) AS losses
+                    FROM trade_closures
+                    """
+                ).fetchone()
+                if not row:
+                    return None
+                wins = int(row["wins"] or 0)
+                losses = int(row["losses"] or 0)
+                denom = wins + losses
+                if denom <= 0:
+                    return None
+                return float(wins / denom)
+        except Exception:
+            pass
+
+    return None
 
 
-def get_monthly_pnl_and_wl(db_path: str, *, months: int = 12) -> List[Dict[str, Any]]:
-    """Monthly aggregates from trade_closures.
+def get_monthly_pnl_and_wl(
+    db_path: Optional[str] = None,
+    *,
+    storage: Optional[Any] = None,
+    months: int = 12,
+) -> List[Dict[str, Any]]:
+    """Monthly aggregates computed from AgentStorage trade replay events."""
+    if storage is None:
+        try:
+            from agent.storage import make_storage
+            storage = make_storage()
+        except Exception:
+            pass
 
-    Returns rows ordered ascending by month:
-      {month: 'YYYY-MM', net_pnl: float, wins: int, losses: int}
-    """
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT
-              substr(timestamp, 1, 7) AS month,
-              SUM(COALESCE(pnl, 0)) AS net_pnl,
-              SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
-              SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) AS losses
-            FROM trade_closures
-            GROUP BY substr(timestamp, 1, 7)
-            ORDER BY month DESC
-            LIMIT ?
-            """,
-            (int(months),),
-        ).fetchall()
+    if storage is not None:
+        try:
+            from agent.daily_report import get_closures_from_replay
+            closures = get_closures_from_replay(storage, limit=1000)
+            by_month: Dict[str, Dict[str, Any]] = {}
+            for c in closures:
+                ts = str(c.get("closed_at") or c.get("created_at") or "")
+                if len(ts) < 7:
+                    continue
+                m = ts[:7]
+                if m not in by_month:
+                    by_month[m] = {"month": m, "net_pnl": 0.0, "wins": 0, "losses": 0}
+                pnl = c.get("realized_pnl")
+                if pnl is not None:
+                    try:
+                        val = float(pnl)
+                        by_month[m]["net_pnl"] += val
+                        if val > 0:
+                            by_month[m]["wins"] += 1
+                        elif val < 0:
+                            by_month[m]["losses"] += 1
+                    except Exception:
+                        pass
 
-        out = [dict(r) for r in rows]
-        out.reverse()  # oldest -> newest for charting
-        # Ensure basic typing.
-        for r in out:
-            r["net_pnl"] = float(r.get("net_pnl") or 0.0)
-            r["wins"] = int(r.get("wins") or 0)
-            r["losses"] = int(r.get("losses") or 0)
-        return out
+            sorted_months = sorted(by_month.keys(), reverse=True)[:months]
+            sorted_months.reverse()  # oldest -> newest for charting
+            for r in [by_month[m] for m in sorted_months]:
+                r["net_pnl"] = float(r.get("net_pnl") or 0.0)
+                r["wins"] = int(r.get("wins") or 0)
+                r["losses"] = int(r.get("losses") or 0)
+            return [by_month[m] for m in sorted_months]
+        except Exception:
+            pass
+
+    # Fallback to SQLite trade_closures
+    if db_path:
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT
+                      substr(timestamp, 1, 7) AS month,
+                      SUM(COALESCE(pnl, 0)) AS net_pnl,
+                      SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
+                      SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) AS losses
+                    FROM trade_closures
+                    GROUP BY substr(timestamp, 1, 7)
+                    ORDER BY month DESC
+                    LIMIT ?
+                    """,
+                    (int(months),),
+                ).fetchall()
+
+                out = [dict(r) for r in rows]
+                out.reverse()  # oldest -> newest for charting
+                for r in out:
+                    r["net_pnl"] = float(r.get("net_pnl") or 0.0)
+                    r["wins"] = int(r.get("wins") or 0)
+                    r["losses"] = int(r.get("losses") or 0)
+                return out
+        except Exception:
+            pass
+
+    return []
+
