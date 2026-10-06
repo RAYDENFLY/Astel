@@ -80,16 +80,16 @@ def moving_block_bootstrap_ci(
 def calculate_statistical_power(
     effect_size: float, std_dev: float, n_obs: int, alpha: float = 0.05
 ) -> float:
-    """Calculates two-tailed statistical power for detecting mean effect_size given sample size n_obs and std_dev."""
+    """Calculates exact two-tailed Z-test statistical power for detecting mean effect_size given sample size n_obs and std_dev."""
     if std_dev <= 0 or n_obs <= 0:
         return 0.0
     se = std_dev / math.sqrt(n_obs)
     delta_z = effect_size / se
-    z_alpha = 1.96 # for 95% 2-tailed
-    # Power = P(Z > z_alpha - delta_z) + P(Z < -z_alpha - delta_z)
-    power = (1.0 - 0.5 * (1.0 + math.erf((z_alpha - delta_z) / math.sqrt(2.0)))) + \
-            (0.5 * (1.0 + math.erf((-z_alpha - delta_z) / math.sqrt(2.0))))
-    return min(1.0, max(0.0, float(power)))
+    z_critical = 1.959963984540054  # norm.ppf(0.975) for 95% 2-tailed alpha=0.05
+
+    power_upper = 1.0 - 0.5 * (1.0 + math.erf((z_critical - delta_z) / math.sqrt(2.0)))
+    power_lower = 0.5 * (1.0 + math.erf((-z_critical - delta_z) / math.sqrt(2.0)))
+    return min(1.0, max(0.0, float(power_upper + power_lower)))
 
 
 class StatisticalProtocolAuditor:

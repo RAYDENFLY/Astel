@@ -23,9 +23,9 @@ Phase 14C-Prep.1 conducted a rigorous methodological audit of the frozen Phase 1
 |---|---|---|
 | Primary Horizon | `T+3` (12 Hours) | Close-to-close forward return based on completed 4H candles |
 | Evaluation Horizons | `T+1`, `T+3`, `T+6` | Multi-horizon evaluation matrix |
-| Minimum Observations ($N$) | 100 evaluation observations | Required usable observations across canonical universe |
+| Minimum Observations ($N$) | 100 evaluation observations | Required usable evaluation observations across canonical universe |
 | Warmup Requirement | 90 candles | Feature lookback window (RSI14, %B, ret_12, ATR14) |
-| Total Required Candles | 196 candles per asset | $90 \text{ warmup} + 100 \text{ observations} + 6 \text{ horizon safety}$ |
+| Total Required Candles | 196 candles per asset | $90 \text{ warmup} + 100 \text{ evaluation} + 6 \text{ horizon safety}$ |
 | Bootstrap Resamples | 1,000 resamples | Paired resamples with replacement |
 | Bootstrap Method | Percentile method | 95% Confidence Interval (2-tailed) |
 | Random Seed | `42` | Fixed deterministic seed |
@@ -45,7 +45,7 @@ Controlled synthetic experiments were conducted using fixed random seeds (`seed=
 | **Case C: Clustered Volatility** | GARCH-like conditional variance | $0.00810$ | $0.00932$ | **$+15.06\%$** |
 | **Case D: Heavy-Tailed Return** | Student-t ($\text{df}=3$, excess kurtosis) | $0.00865$ | $0.00980$ | **$+13.29\%$** |
 
-> **Audit Insight**: Positive serial correlation ($\rho_1 \approx 0.35$) and volatility clustering expand true confidence interval widths by $15\%–18\%$. Standard IID bootstrap provides a transparent baseline, but block bootstrap ($b=3$ or $b=4$) represents a more conservative error boundary for autocorrelated financial returns.
+> **Scoped Interpretation**: These are synthetic scenario results demonstrating sensitivity of bootstrap uncertainty to dependence and distributional structure. They do NOT imply that CandidateSignalV2 OOS confidence intervals will widen by the exact same percentages in empirical testing.
 
 ---
 
@@ -58,16 +58,28 @@ Under AR(1) serial correlation $\rho_1$, effective sample size is given by $N_{\
 - $\rho_1 = 0.00 \implies N_{\text{eff}} = 100.0$ independent observations
 - $\rho_1 = 0.15 \implies N_{\text{eff}} \approx 73.9$ independent observations
 - $\rho_1 = 0.30 \implies N_{\text{eff}} \approx 53.8$ independent observations
+- $\rho_1 = 0.33 \implies N_{\text{eff}} \approx 50.4$ independent observations
 - $\rho_1 = 0.45 \implies N_{\text{eff}} \approx 37.9$ independent observations
 
-### B. Statistical Power Analysis ($\sigma = 0.02$)
+> **Methodological Scoping**: $N_{\text{eff}} \approx 50$ is an illustrative AR(1)-based sensitivity scenario, NOT the empirically estimated effective sample size of CandidateSignalV2. The actual effective sample size of the OOS dataset cannot be estimated until OOS data is collected and evaluated in Phase 14C.
 
-| Hypothetical Paired Edge ($\delta$) | Power at $N=100$ | Power at $N=196$ | Interpretation |
-|---|---:|---:|---|
-| **$0.02\%$ ($0.2$ bps)** | $6.2\%$ | $7.8\%$ | Undetectable at current sample size |
-| **$0.05\%$ ($0.5$ bps)** | $12.4\%$ | $19.8\%$ | Low power; requires larger sample size |
-| **$0.10\%$ ($1.0$ bps)** | $35.2\%$ | $59.4\%$ | Moderate power; detectable if sustained |
-| **$0.20\%$ ($2.0$ bps)** | **$88.5\%$** | **$98.8\%$** | **High power; statistically reliable detection** |
+### B. Parametric Power Sensitivity Analysis ($\sigma = 0.02$, Two-Tailed $\alpha = 0.05$)
+
+This power analysis is a **parametric normal-approximation sensitivity analysis**, NOT an empirical estimate of actual Phase 14C statistical power. Under these normal-approximation assumptions, a hypothetical sample of $N=100$ would have approximately the following power:
+
+| Hypothetical Mean Edge ($\delta$) | $N=100$ (Nominal Eval N) | Hypothetical Statistical $N=196$ Scenario | Illustrative $N_{\text{eff}} \approx 50$ Scenario |
+|---|---:|---:|---:|
+| **$0.02\%$ ($2$ bps)** | $5.11\%$ | $5.22\%$ | $5.06\%$ |
+| **$0.05\%$ ($5$ bps)** | $5.71\%$ | $6.42\%$ | $5.36\%$ |
+| **$0.10\%$ ($10$ bps)** | $7.90\%$ | $10.97\%$ | $6.45\%$ |
+| **$0.20\%$ ($20$ bps)** | **$17.01\%$** | **$28.71\%$** | **$11.13\%$** |
+
+> **Raw Candle Distinction**: $196$ is the required raw completed candles per asset ($90 \text{ warmup} + 100 \text{ evaluation} + 6 \text{ horizon safety}$). It is NOT $196$ independent statistical evaluation observations.
+
+> **Required Effect Size for 80% Power** ($\alpha = 0.05$ two-tailed, $z_{\delta} = 2.8016$):
+> - At nominal $N=100$: Requires a hypothetical mean edge of $\delta = \mathbf{0.56\%}$ ($56$ bps per trade).
+> - At hypothetical statistical $N=196$: Requires $\delta = \mathbf{0.40\%}$ ($40$ bps per trade).
+> - At illustrative $N_{\text{eff}}=50$: Requires $\delta = \mathbf{0.792\%}$ ($79.2$ bps per trade).
 
 ---
 
@@ -83,13 +95,13 @@ Under AR(1) serial correlation $\rho_1$, effective sample size is given by $N_{\
 **YES**. Evaluating consecutive 4H candles on a 3-bar forward horizon ($T+3$) creates a $66.7\%$ candle overlap between adjacent observations $t$ and $t+1$, introducing moving-average serial dependence.
 
 ### D. Is N=100 enough for meaningful inference, and under what assumptions?
-**YES**, for detecting moderate-to-strong effect sizes ($\delta \ge 0.10\%$ per 4H bar). For tiny edges ($\delta \le 0.05\%$), $N=100$ nominal observations yields statistical power $< 20\%$.
+**YES**, for detecting large effect sizes ($\delta \ge 0.56\%$ / $56$ bps per trade for 80% power under normal approximation). For smaller edges ($\le 0.10\%$ / $10$ bps), nominal $N=100$ yields statistical power $< 10\%$.
 
 ### E. What effective sample size might realistically exist?
-For $N = 100$ nominal observations with $\rho_1 \approx 0.33$, $N_{\text{eff}} \approx 50.4$ independent observations.
+For nominal $N = 100$ with $\rho_1 \approx 0.33$, $N_{\text{eff}} \approx 50.4$ represents an illustrative AR(1) sensitivity scenario.
 
 ### F. What effect sizes can Phase 14C realistically detect?
-Phase 14C achieves $> 85\%$ statistical power for detecting paired edges $\ge 0.20\%$ ($20$ bps per trade).
+Under normal-approximation assumptions, detecting a true mean edge of $\ge 0.56\%$ ($56$ bps) achieves $\approx 80\%$ statistical power at $N=100$.
 
 ### G. Are the current benchmarks statistically appropriate?
 **YES**. Paired comparison ($R_{\text{cand}, t} - R_{\text{bench}, t}$) against un-parameterized baselines (`Always LONG`, `Always SHORT`, `Random`) removes market-wide drift variance.
@@ -111,7 +123,18 @@ Phase 14C achieves $> 85\%$ statistical power for detecting paired edges $\ge 0.
 
 ---
 
-## 6. Machine-Readable Summary
+## 6. Audit Limitations & Methodological Constraints
+
+1. **Parametric Sensitivity Nature**: The power analysis is a parametric normal-approximation sensitivity analysis, not an empirical calculation of actual Phase 14C power.
+2. **Raw Candle vs Evaluation N**: $196$ is the required raw completed candle count ($90 \text{ warmup} + 100 \text{ evaluation} + 6 \text{ horizon}$), NOT $196$ independent evaluation observations.
+3. **Illustrative Effective Sample Size**: $N_{\text{eff}} \approx 50$ is an illustrative AR(1) sensitivity scenario, not an empirical estimate of CandidateSignalV2 OOS data.
+4. **Synthetic Stress Test Scope**: Synthetic bootstrap CI width increases (+18.68% under AR(1)) demonstrate theoretical sensitivity and are not forecasts of actual OOS uncertainty.
+5. **Data Unavailability**: Actual independent OOS evidence remains unavailable until Phase 14B.2 collects sufficient completed candles.
+6. **No Premature Inference**: Zero Phase 14C performance evaluation or alpha claim is permitted until the dataset matures.
+
+---
+
+## 7. Machine-Readable Summary
 
 ```text
 PHASE: 14C-PREP.1
