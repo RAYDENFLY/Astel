@@ -103,8 +103,8 @@ class OrderFlowSpecialist:
                 metrics={},
             )
 
-        ob_sig = ob_ev.signal if ob_ev else "UNAVAILABLE"
-        lf_sig = lf_ev.signal if lf_ev else "UNAVAILABLE"
+        ob_sig = ob_ev.signal if (ob_ev and ob_ev.status == "VALID") else "UNAVAILABLE"
+        lf_sig = lf_ev.signal if (lf_ev and lf_ev.status == "VALID") else "UNAVAILABLE"
 
         ob_metrics = ob_ev.raw_metrics if ob_ev else {}
         lf_metrics = lf_ev.raw_metrics if lf_ev else {}
@@ -113,6 +113,18 @@ class OrderFlowSpecialist:
         spread_pct = ob_metrics.get("spread_pct", 0.0)
         flow_imbalance = lf_metrics.get("flow_imbalance", 0.0)
         large_count = lf_metrics.get("large_trade_count", 0)
+
+        # If both evidence sources are UNAVAILABLE, output UNAVAILABLE specialist status
+        if ob_sig == "UNAVAILABLE" and lf_sig == "UNAVAILABLE":
+            return SpecialistOutput(
+                specialist_name="order_flow",
+                direction="UNAVAILABLE",
+                confidence=0.0,
+                evidence=["Order book and trade flow data unavailable"],
+                reasons=["Both order book and trade flow evidence sources marked UNAVAILABLE"],
+                status="UNAVAILABLE",
+                metrics={},
+            )
 
         if ob_ev and ob_ev.status == "VALID":
             reasons.append(f"Order book bid/ask depth imbalance is {imbalance:+.2f} (spread: {spread_pct:.4%})")

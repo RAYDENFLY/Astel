@@ -30,6 +30,7 @@ from agent.schema import AssetAnalysis, AgentSnapshot, AccountSnapshot, Survival
 from agent.decision_agent import DecisionAgent
 from agent.risk_supervisor import RiskSupervisor
 from agent.decision_provenance import DecisionProvenanceManager
+from agent.shadow_trading import ShadowTradingEngine
 
 log = logging.getLogger("agent.market_scanner")
 
@@ -47,6 +48,7 @@ class MarketScanner:
         models_dir: Optional[Path] = None,
         storage: Optional[Any] = None,
         llm_router: Optional[Any] = None,
+        offline_mode: bool = False,
     ) -> None:
         if cfg is None:
             if config_path is None:
@@ -66,10 +68,11 @@ class MarketScanner:
 
         self.models_dir = models_dir
         self._feature_builder = FeatureBuilder(self.cfg)
-        self._intelligence = MarketIntelligence(cfg_dict=self.cfg)
+        self._intelligence = MarketIntelligence(cfg_dict=self.cfg, offline_mode=offline_mode)
         self.decision_agent = DecisionAgent(cfg_dict=self.cfg, llm_router=llm_router)
         self.risk_supervisor = RiskSupervisor()
         self.provenance_manager = DecisionProvenanceManager(storage=storage)
+        self.shadow_engine = ShadowTradingEngine(storage=storage)
 
         # Gate executor setup (public REST endpoints require no secrets)
         gate_cfg = self.cfg.get("gate") or {}
@@ -188,7 +191,7 @@ class MarketScanner:
         # Rank assets by composite evidence strength and probability
         def _rank_key(a: AssetAnalysis) -> float:
             summary_score = a.evidence_summary.weighted_score if a.evidence_summary else a.prediction
-            return summary_score * a.confidence * a.probability
+            return abs(summary_score) * a.confidence * a.probability
 
         results.sort(key=_rank_key, reverse=True)
 
@@ -215,10 +218,28 @@ class MarketScanner:
         proposals = self.decision_agent.evaluate_scanned_assets(scanned_results)
         reviews: List[RiskSupervisorReview] = []
 
+        # Map current prices for shadow engine
+        asset_prices = {a.asset: a.close_price for a in scanned_results if a.close_price > 0}
+
         for prop in proposals:
             review = self.risk_supervisor.review_proposal(prop, snapshot=snapshot)
             reviews.append(review)
             self.provenance_manager.record_decision(prop, review)
+
+            # Record shadow decision (read-only monitoring hook)
+            ref_price = asset_prices.get(prop.asset, 0.0)
+            if ref_price > 0:
+                try:
+                    self.shadow_engine.record_decision(prop, review, reference_price=ref_price)
+                except Exception as shadow_err:
+                    log.warning("MarketScanner: shadow record_decision error for %s: %s", prop.asset, shadow_err)
+
+        # Update price excursions on active shadow trades
+        if asset_prices:
+            try:
+                self.shadow_engine.update_prices(asset_prices)
+            except Exception as upd_err:
+                log.warning("MarketScanner: shadow update_prices error: %s", upd_err)
 
         log.info("MarketScanner: generated %d decision proposals with %d risk supervisor reviews", len(proposals), len(reviews))
         return proposals, reviews
@@ -226,6 +247,7 @@ class MarketScanner:
     def _analyze_asset_bar(self, asset: str, bar: pd.Series) -> AssetAnalysis:
         """Process a single asset's latest feature bar."""
         # 1. Feature values
+        close_price = float(bar.get("close", 0.0) or 0.0)
         ret_1 = float(bar.get("return_1", 0.0) or 0.0)
         ret_3 = float(bar.get("return_3", 0.0) or 0.0)
         atr_val = float(bar.get("atr", 0.0) or 0.0)
@@ -317,4 +339,5 @@ class MarketScanner:
             atr=atr_val,
             rsi=rsi_val,
             ema_trend=ema_trend,
+            close_price=close_price,
         )

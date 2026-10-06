@@ -288,7 +288,7 @@ class AutonomousAgent:
 
         # Phase 12.0 — Market Scanner (scans all configured assets live every tick)
         from agent.market_scanner import MarketScanner
-        self._market_scanner = MarketScanner(cfg=self.cfg)
+        self._market_scanner = MarketScanner(cfg=self.cfg, storage=self._storage, llm_router=self._llm)
 
         # Phase 9.2 — Reasoning Validator (audits every LLM plan)
         self._reasoning_validator = ReasoningValidator(storage=self._storage)
@@ -430,6 +430,18 @@ class AutonomousAgent:
         except Exception as ms_err:
             log.warning("MarketScanner tick #%d failed (non-fatal): %s", self._loop_count, ms_err)
 
+        # 2c. Evaluate Decision Proposals and Risk Supervisor Reviews with Shadow Trading Hook
+        decision_proposals = []
+        risk_reviews = []
+        if market_analysis:
+            try:
+                decision_proposals, risk_reviews = self._market_scanner.evaluate_decisions(
+                    scanned_results=market_analysis,
+                    snapshot=None,
+                )
+            except Exception as dev_err:
+                log.warning("MarketScanner evaluate_decisions failed (non-fatal): %s", dev_err)
+
         # 3. Fetch snapshot
         snapshot = fetch_snapshot(
             dashboard_base_url = self.cfg["dashboard_base_url"],
@@ -440,6 +452,8 @@ class AutonomousAgent:
             llm_cost_today_usd = self._treasury._llm_cost_today,
             market_analysis    = market_analysis,
         )
+        snapshot.decision_proposals = decision_proposals
+        snapshot.risk_reviews = risk_reviews
 
         # 3b. Run analyst team (Phase 4)
         analyst_reports = self._analysts.analyze(snapshot)

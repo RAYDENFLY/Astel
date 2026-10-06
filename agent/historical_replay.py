@@ -73,7 +73,7 @@ class HistoricalReplayEngine:
         self.cfg = cfg_dict
 
         self.feature_builder = FeatureBuilder(self.cfg)
-        self.intelligence = MarketIntelligence(cfg_dict=self.cfg)
+        self.intelligence = MarketIntelligence(cfg_dict=self.cfg, offline_mode=True)
         self.decision_agent = DecisionAgent(
             cfg_dict={"decision_agent": {"top_n": self.config.top_n, "disabled_llm_mode": not self.config.llm_replay_enabled}}
         )
@@ -189,7 +189,7 @@ class HistoricalReplayEngine:
 
             # Rank assets by composite score
             step_analyses.sort(
-                key=lambda a: (a.evidence_summary.weighted_score if a.evidence_summary else a.prediction) * a.confidence * a.probability,
+                key=lambda a: abs(a.evidence_summary.weighted_score if a.evidence_summary else a.prediction) * a.confidence * a.probability,
                 reverse=True,
             )
             for r, a in enumerate(step_analyses, start=1):

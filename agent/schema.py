@@ -160,6 +160,7 @@ class AssetAnalysis(BaseModel):
     rsi: float
     ema_trend: str
     rank: int = 0
+    close_price: float = 0.0
 
     # Phase 12.1 — Market Intelligence extension
     market_evidence: List[MarketEvidence] = Field(default_factory=list)

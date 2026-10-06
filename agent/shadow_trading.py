@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from agent.schema import (
     DecisionProposal,
@@ -45,6 +45,32 @@ class ShadowTradingEngine:
             raise RuntimeError("CRITICAL ERROR: ShadowTradingEngine must be run in SHADOW execution mode!")
 
         self._active_shadow_trades: Dict[str, ShadowTrade] = {}
+        self._recorded_decision_ids: Set[str] = set()
+
+        # Hydrate active trades and recorded decision IDs from storage if available
+        if self.storage:
+            try:
+                recent_trades = self.storage.get_recent_shadow_trades(limit=200)
+                for t_dict in recent_trades:
+                    dec_id = t_dict.get("decision_id")
+                    if dec_id:
+                        self._recorded_decision_ids.add(dec_id)
+                    if t_dict.get("outcome") == "OPEN":
+                        st = ShadowTrade(**t_dict)
+                        self._active_shadow_trades[st.shadow_id] = st
+                log.info("ShadowTradingEngine initialized with %d active trades and %d decision records from DB",
+                         len(self._active_shadow_trades), len(self._recorded_decision_ids))
+            except Exception as e:
+                log.warning("ShadowTradingEngine: error loading state from storage: %s", e)
+
+    def record_decision(
+        self,
+        proposal: DecisionProposal,
+        review: RiskSupervisorReview,
+        reference_price: float,
+    ) -> Optional[ShadowTrade]:
+        """Alias for process_decision_review to match API context."""
+        return self.process_decision_review(proposal, review, reference_price)
 
     def process_decision_review(
         self,
@@ -53,16 +79,35 @@ class ShadowTradingEngine:
         reference_price: float,
     ) -> Optional[ShadowTrade]:
         """
-        Creates a simulated ShadowTrade if proposal is APPROVED_FOR_RISK_REVIEW or TRADE_CANDIDATE.
+        Creates a simulated ShadowTrade if proposal is APPROVED_FOR_RISK_REVIEW and TRADE_CANDIDATE.
+        Enforces strict idempotency and structured read-only logging.
         """
-        if reference_price <= 0:
-            log.warning("ShadowTradingEngine: invalid reference price %.2f for %s", reference_price, proposal.asset)
+        # Idempotency Guard 1: Duplicate decision_id check
+        if proposal.decision_id in self._recorded_decision_ids:
+            log.info("[SHADOW] decision skipped asset=%s reason=DUPLICATE decision_id=%s",
+                     proposal.asset, proposal.decision_id)
             return None
 
-        # Create shadow trade ONLY for candidates or approved proposals
-        if review.status != "APPROVED_FOR_RISK_REVIEW" and proposal.decision != "TRADE_CANDIDATE":
-            log.info("ShadowTradingEngine: skipping shadow trade creation for %s (status=%s, decision=%s)",
-                     proposal.asset, review.status, proposal.decision)
+        # Idempotency Guard 2: Active open trade on same asset and direction check
+        if any(t.asset == proposal.asset and t.outcome == "OPEN" and t.direction == proposal.direction
+               for t in self._active_shadow_trades.values()):
+            log.info("[SHADOW] decision skipped asset=%s reason=ACTIVE_TRADE_EXISTS decision_id=%s",
+                     proposal.asset, proposal.decision_id)
+            self._recorded_decision_ids.add(proposal.decision_id)
+            return None
+
+        # Eligibility Check: Only approved TRADE_CANDIDATE proposals become shadow trades
+        if review.status != "APPROVED_FOR_RISK_REVIEW" or proposal.decision != "TRADE_CANDIDATE":
+            skip_reason = review.status if review.status != "APPROVED_FOR_RISK_REVIEW" else proposal.decision
+            log.info("[SHADOW] decision skipped asset=%s reason=%s decision_id=%s",
+                     proposal.asset, skip_reason, proposal.decision_id)
+            self._recorded_decision_ids.add(proposal.decision_id)
+            return None
+
+        # Reference Price Check
+        if reference_price <= 0:
+            log.warning("[SHADOW] decision skipped asset=%s reason=INVALID_PRICE decision_id=%s",
+                        proposal.asset, proposal.decision_id)
             return None
 
         now_iso = datetime.now(tz=timezone.utc).isoformat()
@@ -90,6 +135,7 @@ class ShadowTradingEngine:
             outcome="OPEN",
         )
 
+        self._recorded_decision_ids.add(proposal.decision_id)
         self._active_shadow_trades[shadow_id] = shadow_trade
 
         if self.storage:
@@ -98,8 +144,8 @@ class ShadowTradingEngine:
             except Exception as err:
                 log.warning("ShadowTradingEngine: failed persisting shadow trade %s: %s", shadow_id, err)
 
-        log.info("ShadowTradingEngine: created SHADOW TRADE %s for %s at ref price $%.4f (Direction=%s, Mode=SHADOW, NO_ORDERS_SENT)",
-                 shadow_id, proposal.asset, reference_price, proposal.direction)
+        log.info("[SHADOW] decision recorded asset=%s direction=%s confidence=%.2f risk_status=%s decision_id=%s",
+                 proposal.asset, proposal.direction, proposal.confidence, review.status, proposal.decision_id)
 
         return shadow_trade
 
@@ -107,8 +153,10 @@ class ShadowTradingEngine:
         """
         Updates unrealized return, MFE (Max Favorable Excursion), and MAE (Max Adverse Excursion)
         for all open shadow trades using live price updates.
+        Also evaluates trade lifecycle (expiry / TP / SL).
         """
         updated_trades: List[ShadowTrade] = []
+        now_dt = datetime.now(tz=timezone.utc)
 
         for shadow_id, trade in list(self._active_shadow_trades.items()):
             if trade.outcome != "OPEN":
@@ -144,6 +192,20 @@ class ShadowTradingEngine:
                     self.storage.update_shadow_trade(trade.model_dump())
                 except Exception as err:
                     log.warning("ShadowTradingEngine: failed updating shadow trade %s: %s", shadow_id, err)
+
+            # Check Lifecycle Expiry (12 Hours Horizon or TP/SL)
+            try:
+                ts_dt = datetime.fromisoformat(trade.timestamp.replace("Z", "+00:00"))
+                age_hours = (now_dt - ts_dt).total_seconds() / 3600.0
+
+                if age_hours >= 12.0:
+                    self.close_shadow_trade(shadow_id, price, reason="HORIZON_REACHED")
+                elif ret >= 0.03:
+                    self.close_shadow_trade(shadow_id, price, reason="TAKE_PROFIT")
+                elif ret <= -0.02:
+                    self.close_shadow_trade(shadow_id, price, reason="STOP_LOSS")
+            except Exception as exp_err:
+                log.warning("ShadowTradingEngine: error evaluating lifecycle for %s: %s", shadow_id, exp_err)
 
         return updated_trades
 

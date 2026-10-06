@@ -60,6 +60,7 @@ class IntelligenceConfig:
         self.max_freshness_sec: float = float(intel_cfg.get("max_freshness_sec", 300.0))
         self.stale_threshold_sec: float = float(intel_cfg.get("stale_threshold_sec", 600.0))
         self.gate_base_url: str      = intel_cfg.get("gate_base_url", "https://api.gateio.ws/api/v4")
+        self.offline_mode: bool      = bool(intel_cfg.get("offline_mode", False))
 
 
 class SimpleAPICache:
@@ -776,8 +777,9 @@ class MarketIntelligence:
     Gathers evidence across all independent market sources concurrently or sequentially with timeout safety,
     aggregates evidence, and enriches AssetAnalysis objects.
     """
-    def __init__(self, cfg_dict: Optional[Dict[str, Any]] = None):
+    def __init__(self, cfg_dict: Optional[Dict[str, Any]] = None, offline_mode: bool = False):
         self.config = IntelligenceConfig(cfg_dict)
+        self.offline_mode = offline_mode or self.config.offline_mode
         self.api_client = GatePublicAPIClient(
             base_url=self.config.gate_base_url,
             timeout=self.config.http_timeout_sec,
@@ -828,33 +830,45 @@ class MarketIntelligence:
         # Gathers independent evidence bounded by fast concurrency or fallback
         independent_evidences: List[MarketEvidence] = []
 
-        def _fetch_all():
-            ob = analyze_order_book(self.api_client, asset)
-            lf = analyze_large_flow(self.api_client, asset)
-            oi = analyze_open_interest(self.api_client, asset, latest_price_change=price_change_1h)
-            fn = analyze_funding(self.api_client, asset)
-            pos = analyze_positioning(self.api_client, asset)
-            reg = analyze_btc_regime(btc_bar_info, asset)
-            news = self.news_adapter.get_evidence(asset)
-            return [ob, lf, oi, fn, pos, reg, news]
-
-        try:
-            # Use bounded thread pool for fast parallel API requests
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                future = executor.submit(_fetch_all)
-                independent_evidences = future.result(timeout=self.config.http_timeout_sec * 2)
-        except Exception as err:
-            log.warning("MarketIntelligence fetch for %s timed out or failed: %s (falling back to graceful degraded states)", asset, err)
-            # Fallback degraded states for individual sources
+        if self.offline_mode:
+            # Offline historical replay mode — do not fabricate live orderbook data
             independent_evidences = [
-                MarketEvidence(source="order_book", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
-                MarketEvidence(source="large_flow", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
-                MarketEvidence(source="open_interest", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
-                MarketEvidence(source="funding", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
-                MarketEvidence(source="positioning", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                MarketEvidence(source="order_book", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Offline historical replay — live orderbook unavailable", raw_metrics={}),
+                MarketEvidence(source="large_flow", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Offline historical replay — live trade flow unavailable", raw_metrics={}),
+                MarketEvidence(source="open_interest", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Offline historical replay — live OI stats unavailable", raw_metrics={}),
+                MarketEvidence(source="funding", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Offline historical replay — live funding rate unavailable", raw_metrics={}),
+                MarketEvidence(source="positioning", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Offline historical replay — live positioning unavailable", raw_metrics={}),
                 analyze_btc_regime(btc_bar_info, asset),
                 self.news_adapter.get_evidence(asset),
             ]
+        else:
+            def _fetch_all():
+                ob = analyze_order_book(self.api_client, asset)
+                lf = analyze_large_flow(self.api_client, asset)
+                oi = analyze_open_interest(self.api_client, asset, latest_price_change=price_change_1h)
+                fn = analyze_funding(self.api_client, asset)
+                pos = analyze_positioning(self.api_client, asset)
+                reg = analyze_btc_regime(btc_bar_info, asset)
+                news = self.news_adapter.get_evidence(asset)
+                return [ob, lf, oi, fn, pos, reg, news]
+
+            try:
+                # Use bounded thread pool for fast parallel API requests
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    future = executor.submit(_fetch_all)
+                    independent_evidences = future.result(timeout=self.config.http_timeout_sec * 2)
+            except Exception as err:
+                log.warning("MarketIntelligence fetch for %s timed out or failed: %s (falling back to graceful degraded states)", asset, err)
+                # Fallback degraded states for individual sources
+                independent_evidences = [
+                    MarketEvidence(source="order_book", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                    MarketEvidence(source="large_flow", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                    MarketEvidence(source="open_interest", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                    MarketEvidence(source="funding", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                    MarketEvidence(source="positioning", signal="UNAVAILABLE", score=0.0, confidence=0.0, timestamp=now_iso, freshness_seconds=0.0, status="UNAVAILABLE", reason="Fetch timeout", raw_metrics={}),
+                    analyze_btc_regime(btc_bar_info, asset),
+                    self.news_adapter.get_evidence(asset),
+                ]
 
         all_evidences, summary = self.aggregator.aggregate(
             asset=asset,
